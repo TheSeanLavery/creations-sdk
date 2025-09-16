@@ -1,0 +1,128 @@
+/* Base styles for R1 device (240x320px portrait) */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 4vw; /* Base font size relative to viewport width */
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    position: relative;
+}
+
+h1 {
+    font-size: 6vw;
+    color: #FE5F00; /* Orange accent color */
+    margin-bottom: 3vw;
+}
+
+p {
+    font-size: 4vw;
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* Touch target minimum 44x44 CSS pixels */
+button, .touchable {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 3vw 5vw;
+    font-size: 4vw;
+    background-color: #FE5F00;
+    color: #000;
+    border: none;
+    border-radius: 2vw;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+button:active, .touchable:active {
+    opacity: 0.8;
+}
+
+/* Demo box showing proper sizing */
+.demo-box {
+    background-color: #222;
+    border: 1px solid #FE5F00;
+    border-radius: 2vw;
+    padding: 4vw;
+    margin-top: 4vw;
+}
+
+/* Game-specific styles */
+#gameContainer {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+#score {
+    position: absolute;
+    top: 2vw;
+    left: 2vw;
+    font-size: 4vw;
+    color: #FE5F00;
+    z-index: 10;
+    font-weight: bold;
+}
+
+#gameCanvas {
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    display: block;
+}
+
+#gameOver {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    border: 2px solid #FE5F00;
+    border-radius: 3vw;
+    padding: 6vw;
+    text-align: center;
+    z-index: 20;
+}
+
+#gameOver h2 {
+    font-size: 6vw;
+    color: #FE5F00;
+    margin-bottom: 3vw;
+}
+
+#gameOver p {
+    font-size: 4vw;
+    margin-bottom: 2vw;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* IMPORTANT: Canvas sizing for R1 device */
+/* 
+   The R1 screen is 240x282px (portrait)
+   Canvas is set to full screen dimensions
+*/
