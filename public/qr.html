@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QR - Plugin Demo URL & JSON</title>
+    <style>
+      :root{
+        --bg: #0b1020;
+        --card: #0f172a;
+        --muted: #94a3b8;
+        --fg: #e2e8f0;
+        --accent: #22d3ee;
+      }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        background: radial-gradient(1200px 600px at 50% -20%, rgba(34,211,238,0.18), transparent 60%), var(--bg);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        color: var(--fg);
+        padding: 24px;
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+        border: 1px solid rgba(148,163,184,0.2);
+        border-radius: 16px;
+        padding: 20px;
+        width: min(560px, 92vw);
+        box-shadow: 0 6px 40px rgba(2,6,23,0.6);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      header h1 { font-size: 16px; margin: 0; color: var(--fg); }
+      header a { color: var(--accent); text-decoration: none; }
+      .desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+      .qr-wrap {
+        display: grid;
+        place-items: center;
+        background: #0b1220;
+        border: 1px solid rgba(148,163,184,0.18);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .url {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: var(--muted);
+        font-size: 12px;
+        word-break: break-all;
+        margin-top: 12px;
+      }
+      .list { margin-top: 12px; }
+      .list a { color: var(--accent); text-decoration: none; font-size: 13px; }
+      .small { color: var(--muted); font-size: 12px; }
+      /* JSON section styles */
+      .grid { display: grid; gap: 10px; }
+      .two { grid-template-columns: 1fr 1fr; }
+      .label { font-size: 12px; color: var(--muted); }
+      .input, .textarea {
+        width: 100%;
+        background: #0b1220;
+        border: 1px solid rgba(148,163,184,0.25);
+        color: var(--fg);
+        border-radius: 8px;
+        padding: 10px 12px;
+        outline: none;
+      }
+      .input:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,211,238,0.15); }
+      .textarea { min-height: 72px; resize: vertical; }
+      .btn {
+        background: linear-gradient(180deg, rgba(34,211,238,0.24), rgba(34,211,238,0.18));
+        color: var(--fg);
+        border: 1px solid rgba(34,211,238,0.35);
+        padding: 10px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .row .grow { flex: 1; }
+      .code {
+        background: #0b1220;
+        border: 1px solid rgba(148,163,184,0.18);
+        border-radius: 8px;
+        padding: 12px;
+        color: var(--fg);
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+      }
+    </style>
+    
+    <script>
+      async function resolveTargets() {
+        const res = await fetch('/api/network-info', { cache: 'no-store' });
+        const info = await res.json();
+
+        // Prefer header-derived URL (works behind proxies), else first local address
+        const preferred = info.byHeader?.ballUrl || (info.urlsByAddress[0]?.ballUrl);
+        const all = info.urlsByAddress.map(x => x.ballUrl);
+        return { preferred, all };
+      }
+
+      async function render() {
+        const { preferred, all } = await resolveTargets();
+        const target = preferred || window.location.origin + '/ball/';
+        const img = document.getElementById('qr');
+        const api = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=1&data=' + encodeURIComponent(target);
+        img.src = api;
+        document.getElementById('preferred-url').textContent = target;
+
+        const list = document.getElementById('all');
+        list.innerHTML = '';
+        for (const url of all) {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = url; a.textContent = url; a.target = '_blank';
+          li.appendChild(a);
+          list.appendChild(li);
+        }
+      }
+
+      // ===== JSON QR GENERATOR =====
+      function encodeBase64Url(s) {
+        return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      }
+
+      function decodeBase64Url(s) {
+        s = s.replace(/-/g, '+').replace(/_/g, '/');
+        while (s.length % 4) s += '=';
+        return atob(s);
+      }
+
+      function jsonGetFormData() {
+        const get = id => document.getElementById(id).value.trim();
+        return {
+          title: get('f-title'),
+          url: get('f-url'),
+          description: get('f-description'),
+          iconUrl: get('f-icon'),
+          themeColor: document.getElementById('f-color').value || '#FE5000'
+        };
+      }
+
+      function jsonUpdatePreview() {
+        const data = jsonGetFormData();
+        document.getElementById('json-preview').textContent = JSON.stringify(data, null, 2);
+      }
+
+      function jsonUpdateShareUrl() {
+        const data = jsonGetFormData();
+        const hasData = Object.values(data).some(v => v && v !== '#FE5000');
+        const input = document.getElementById('share-url');
+        if (!hasData) { input.value = ''; return; }
+        const encoded = encodeBase64Url(JSON.stringify(data));
+        input.value = `${window.location.origin}${window.location.pathname}?jsondata=${encoded}`;
+      }
+
+      async function jsonGenerateQR() {
+        const data = jsonGetFormData();
+        if (!data.title && !data.url && !data.description) {
+          alert('Please fill in at least one of title, url, or description.');
+          return;
+        }
+        const img = document.getElementById('json-qr');
+        const payload = JSON.stringify(data);
+        const api = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=1&data=' + encodeURIComponent(payload);
+        img.src = api;
+        jsonUpdatePreview();
+        jsonUpdateShareUrl();
+      }
+
+      function jsonDownloadQR() {
+        const img = document.getElementById('json-qr');
+        if (!img || !img.naturalWidth) return;
+        const size = 360; const pad = 20; const footer = 28;
+        const out = document.createElement('canvas');
+        out.width = size + pad*2; out.height = size + pad*2 + footer;
+        const ctx = out.getContext('2d');
+        try {
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,out.width,out.height);
+          ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#22d3ee';
+          ctx.lineWidth = 3; ctx.strokeRect(6,6,out.width-12,out.height-footer-12);
+          ctx.drawImage(img, pad, pad, size, size);
+          ctx.fillStyle = '#0b1020'; ctx.font = 'bold 12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+          ctx.textAlign = 'center'; ctx.fillText('r1 creations', out.width/2, out.height-10);
+          const a = document.createElement('a');
+          a.download = 'qr-json.png';
+          a.href = out.toDataURL('image/png');
+          a.click();
+        } catch (e) {
+          // Fallback: open raw image for manual save if canvas is tainted
+          const a = document.createElement('a');
+          a.href = img.src; a.target = '_blank';
+          a.click();
+        }
+      }
+
+      function jsonCopyShare() {
+        const input = document.getElementById('share-url');
+        if (!input.value) return;
+        navigator.clipboard.writeText(input.value).catch(() => {
+          input.select(); document.execCommand('copy');
+        });
+      }
+
+      function jsonPrefillFromParams() {
+        const params = new URLSearchParams(window.location.search);
+        const enc = params.get('jsondata');
+        if (!enc) return false;
+        try {
+          const raw = decodeBase64Url(enc);
+          const data = JSON.parse(raw);
+          const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+          set('f-title', data.title);
+          set('f-url', data.url);
+          set('f-description', data.description);
+          set('f-icon', data.iconUrl);
+          set('f-color', data.themeColor || '#FE5000');
+          return true;
+        } catch (e) { return false; }
+      }
+
+      function initJsonQr() {
+        const form = document.getElementById('json-form');
+        form.addEventListener('submit', (e) => { e.preventDefault(); jsonGenerateQR(); });
+        for (const id of ['f-title','f-url','f-description','f-icon','f-color']) {
+          const el = document.getElementById(id);
+          el.addEventListener('input', () => { jsonUpdatePreview(); jsonUpdateShareUrl(); });
+        }
+        document.getElementById('btn-generate').addEventListener('click', (e) => { e.preventDefault(); jsonGenerateQR(); });
+        document.getElementById('btn-download').addEventListener('click', (e) => { e.preventDefault(); jsonDownloadQR(); });
+        document.getElementById('btn-copy').addEventListener('click', (e) => { e.preventDefault(); jsonCopyShare(); });
+        const had = jsonPrefillFromParams();
+        jsonUpdatePreview();
+        jsonUpdateShareUrl();
+        if (had) jsonGenerateQR();
+      }
+
+      addEventListener('DOMContentLoaded', () => { render(); initJsonQr(); });
+    </script>
+  </head>
+  <body>
+    <div class="card">
+      <header>
+        <h1>Scan to open Bouncing Ball</h1>
+        <a href="/" title="Back to host">Back</a>
+      </header>
+      <div class="desc">Other devices on your network can scan this QR code to open the bouncing ball demo.</div>
+      <div class="qr-wrap">
+        <img id="qr" width="320" height="320" alt="QR code" />
+        <div class="url" id="preferred-url"></div>
+      </div>
+      <div class="list">
+        <div class="small">All detected URLs:</div>
+        <ul id="all"></ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 16px;">
+      <header>
+        <h1>Generate JSON QR</h1>
+        <a href="/qr/" title="Open advanced generator">Enhanced</a>
+      </header>
+      <div class="desc">Fill the fields to build a JSON object. Generate a QR that encodes the JSON, copy a shareable link, or download the PNG.</div>
+      <form id="json-form" class="grid">
+        <div class="grid two">
+          <div>
+            <div class="label">Title</div>
+            <input id="f-title" class="input" type="text" placeholder="Enter title" />
+          </div>
+          <div>
+            <div class="label">URL</div>
+            <input id="f-url" class="input" type="url" placeholder="https://example.com" />
+          </div>
+        </div>
+        <div>
+          <div class="label">Description</div>
+          <textarea id="f-description" class="textarea" placeholder="Enter description"></textarea>
+        </div>
+        <div class="grid two">
+          <div>
+            <div class="label">Icon URL</div>
+            <input id="f-icon" class="input" type="url" placeholder="https://.../icon.png" />
+          </div>
+          <div>
+            <div class="label">Theme Color</div>
+            <input id="f-color" class="input" type="text" value="#FE5000" pattern="^#[0-9A-Fa-f]{6}$" placeholder="#FE5000" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="btn-generate" class="btn" type="submit">Generate QR</button>
+          <div class="grow"></div>
+          <button id="btn-download" class="btn" type="button">Download PNG</button>
+        </div>
+      </form>
+      <div class="qr-wrap" style="margin-top: 12px;">
+        <img id="json-qr" width="320" height="320" alt="JSON QR" />
+      </div>
+      <div class="small" style="margin-top: 12px;">JSON Preview</div>
+      <pre id="json-preview" class="code">{
+  "title": "",
+  "url": "",
+  "description": "",
+  "iconUrl": "",
+  "themeColor": "#FE5000"
+}</pre>
+      <div class="row" style="margin-top: 12px;">
+        <input id="share-url" class="input grow" type="text" readonly placeholder="Share URL will appear here" />
+        <button id="btn-copy" class="btn" type="button">Copy</button>
+      </div>
+    </div>
+  </body>
+  </html>
+
+

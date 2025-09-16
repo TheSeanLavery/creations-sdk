@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Host - Plugin Demo Iframe</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        color: #0f172a;
+        background: #f8fafc;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 12px 16px;
+        background: white;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      header a {
+        color: #0ea5e9;
+        text-decoration: none;
+      }
+      main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        align-items: stretch;
+        gap: 0;
+      }
+      .stage {
+        min-width: 0;
+        display: grid;
+        place-items: start center; /* top align, center horizontally within its grid column */
+        position: relative;
+        padding-top: 100px; /* top padding */
+      }
+      .viewport {
+        position: relative;
+        width: 240px;
+        height: 282px;
+        background: #000;
+        border: 1px solid #e2e8f0;
+        border-radius: 0;
+        overflow: hidden;
+        z-index: 1;
+        margin-left: -50px; /* offset 50px left of column center */
+      }
+      .viewport iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 240px;
+        height: 282px;
+        border: 0;
+        background: #000;
+        /* native scale */
+      }
+      .overlay-img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        max-width: none;
+        pointer-events: none;
+        transform: none;
+        transform-origin: top left;
+        image-rendering: auto;
+        z-index: 100;
+      }
+      aside {
+        border-left: 1px solid #e2e8f0;
+        background: #ffffff;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .qr-card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+      }
+      .qr-url {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: #334155;
+        font-size: 12px;
+        word-break: break-all;
+        text-align: center;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .url {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: #64748b;
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border: 1px solid #e2e8f0;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .label { font-size: 12px; color: #64748b; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .grid { display: grid; gap: 8px; }
+      .two { grid-template-columns: 1fr 1fr; }
+      .input, .textarea {
+        width: 100%;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 8px 10px;
+        outline: none;
+        font-size: 14px;
+      }
+      .input:focus, .textarea:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
+      .textarea { min-height: 72px; resize: vertical; }
+      .btn {
+        background: linear-gradient(180deg, rgba(14,165,233,0.18), rgba(14,165,233,0.12));
+        color: #0f172a;
+        border: 1px solid rgba(14,165,233,0.35);
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        word-break: break-word;
+      }
+    </style>
+    
+  </head>
+  <body>
+    <header>
+      <div class="bar">
+        <strong>Host</strong>
+        <span class="url">/ball</span>
+      </div>
+    </header>
+    <main>
+      <div class="stage">
+        <div class="viewport" id="viewport">
+          <iframe src="/ball/index.html" allow="camera; microphone; clipboard-read; clipboard-write; autoplay"></iframe>
+        </div>
+        <img id="overlay" class="overlay-img" src="/r1.png" alt="Overlay" />
+      </div>
+      <aside>
+        <div class="card">
+          <strong>Generated QR</strong>
+          <div class="qr-card">
+            <img id="json-qr-img" width="260" height="260" alt="JSON QR" />
+          </div>
+          <div class="label">Share URL</div>
+          <div class="row">
+            <input id="share-url" class="input mono" type="text" readonly placeholder="Share URL will appear here" />
+            <button id="btn-copy" class="btn" type="button">Copy</button>
+            <button id="btn-download" class="btn" type="button">Download PNG</button>
+          </div>
+        </div>
+        <div class="card">
+          <strong>JSON QR (auto-filled)</strong>
+          <div class="grid">
+            <div class="two">
+              <div>
+                <div class="label">Title</div>
+                <input id="f-title" class="input" type="text" placeholder="Enter title" />
+              </div>
+              <div>
+                <div class="label">URL</div>
+                <input id="f-url" class="input" type="url" placeholder="https://example.com" />
+              </div>
+            </div>
+            <div>
+              <div class="label">Description</div>
+              <textarea id="f-description" class="textarea" placeholder="Enter description"></textarea>
+            </div>
+            <div class="two">
+              <div>
+                <div class="label">Icon URL</div>
+                <input id="f-icon" class="input" type="url" placeholder="https://.../icon.png" />
+              </div>
+              <div>
+                <div class="label">Theme Color</div>
+                <input id="f-color" class="input" type="text" value="#FE5000" pattern="^#[0-9A-Fa-f]{6}$" placeholder="#FE5000" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="btn-generate" class="btn" type="button">Generate</button>
+              <div style="flex:1"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <strong>Overlay Controls</strong>
+          <div class="grid">
+            <div>
+              <div class="label">X Position</div>
+              <div class="row">
+                <input id="ov-x" class="input" type="range" min="-240" max="240" value="-31" step="1" />
+                <input id="ov-x-num" class="input" type="number" min="-240" max="240" step="1" value="-31" style="width: 96px;" />
+              </div>
+            </div>
+            <div>
+              <div class="label">Y Position</div>
+              <div class="row">
+                <input id="ov-y" class="input" type="range" min="-240" max="240" value="-86" step="1" />
+                <input id="ov-y-num" class="input" type="number" min="-240" max="240" step="1" value="-86" style="width: 96px;" />
+              </div>
+            </div>
+            <div>
+              <div class="label">Overlay Scale</div>
+              <div class="row">
+                <input id="ov-scale" class="input" type="range" min="0.4" max="1" step="0.001" value="0.49" />
+                <input id="ov-scale-num" class="input" type="number" min="0.4" max="1" step="0.001" value="0.49" style="width: 96px;" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="ov-reset" class="btn" type="button">Reset</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+    <script>
+      function isLocalhostUrl(urlString) {
+        try {
+          const u = new URL(urlString);
+          return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '::1';
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function isPrivateIPv4(ip) {
+        if (!ip) return false;
+        if (ip.startsWith('10.')) return true;
+        if (ip.startsWith('192.168.')) return true;
+        if (ip.startsWith('172.')) {
+          const parts = ip.split('.');
+          const second = parseInt(parts[1] || '0', 10);
+          return second >= 16 && second <= 31;
+        }
+        return false;
+      }
+
+      // Resolve the best ball demo URL for auto-fill
+      async function resolveBallUrl(){
+        try{
+          const res = await fetch('/api/network-info', { cache: 'no-store' });
+          const info = await res.json();
+          const entries = Array.isArray(info.urlsByAddress) ? info.urlsByAddress : [];
+          const privateEntry = entries.find(e => isPrivateIPv4(e.address));
+          const firstEntry = entries[0];
+          let candidate = privateEntry?.ballUrl || firstEntry?.ballUrl || null;
+          if (!candidate && info.byHeader?.ballUrl) {
+            candidate = info.byHeader.ballUrl;
+          }
+          if (!candidate) {
+            candidate = window.location.origin + '/ball/';
+          }
+          return candidate;
+        }catch(e){
+          return window.location.origin + '/ball/';
+        }
+      }
+
+      // ===== JSON QR on main page =====
+      function encodeBase64Url(s) {
+        return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      }
+      function decodeBase64Url(s) {
+        s = s.replace(/-/g, '+').replace(/_/g, '/');
+        while (s.length % 4) s += '=';
+        return atob(s);
+      }
+      function getFormData(){
+        const get = id => document.getElementById(id).value.trim();
+        return {
+          title: get('f-title'),
+          url: get('f-url'),
+          description: get('f-description'),
+          iconUrl: get('f-icon'),
+          themeColor: document.getElementById('f-color').value || '#FE5000'
+        };
+      }
+      function updateShareUrl(){
+        const data = getFormData();
+        const has = Object.values(data).some(v => v && v !== '#FE5000');
+        const input = document.getElementById('share-url');
+        if (!has) { input.value = ''; return; }
+        const encoded = encodeBase64Url(JSON.stringify(data));
+        input.value = `${window.location.origin}/qr/?jsondata=${encoded}`;
+      }
+      async function generateJsonQr(){
+        const data = getFormData();
+        if (!data.title && !data.url && !data.description) return;
+        const img = document.getElementById('json-qr-img');
+        const payload = JSON.stringify(data);
+        const api = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=1&data=' + encodeURIComponent(payload);
+        img.src = api;
+        updateShareUrl();
+      }
+      function downloadJsonQr(){
+        const img = document.getElementById('json-qr-img');
+        if (!img || !img.naturalWidth) return;
+        const size = 300; const pad = 16; const footer = 26;
+        const out = document.createElement('canvas');
+        out.width = size + pad*2; out.height = size + pad*2 + footer;
+        const ctx = out.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,out.width,out.height);
+        ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 3; ctx.strokeRect(6,6,out.width-12,out.height-footer-12);
+        ctx.drawImage(img, pad, pad, size, size);
+        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+        ctx.textAlign = 'center'; ctx.fillText('r1 creations', out.width/2, out.height-8);
+        const a = document.createElement('a'); a.download = 'qr-json.png'; a.href = out.toDataURL('image/png'); a.click();
+      }
+      function copyShare(){
+        const input = document.getElementById('share-url');
+        if (!input.value) return;
+        navigator.clipboard.writeText(input.value).catch(() => { input.select(); document.execCommand('copy'); });
+      }
+      function applyDataToForm(data){
+        const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+        set('f-title', data.title);
+        set('f-url', data.url);
+        set('f-description', data.description);
+        set('f-icon', data.iconUrl);
+        set('f-color', data.themeColor || '#FE5000');
+      }
+      async function autoFillFromParamsOrNetwork(){
+        // 1) Prefer ?jsondata=
+        const params = new URLSearchParams(window.location.search);
+        const enc = params.get('jsondata');
+        if (enc) {
+          try {
+            const raw = decodeBase64Url(enc);
+            const data = JSON.parse(raw);
+            applyDataToForm(data);
+            await generateJsonQr();
+            return;
+          } catch (_) { /* fallthrough */ }
+        }
+        // 2) Else auto-fill URL from network info
+        try {
+          const url = await resolveBallUrl();
+          const data = {
+            title: 'Bouncing Ball',
+            url,
+            description: 'Scan to open the bouncing ball demo on your device',
+            iconUrl: '',
+            themeColor: '#FE5000'
+          };
+          applyDataToForm(data);
+          await generateJsonQr();
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', async () => {
+        for (const id of ['f-title','f-url','f-description','f-icon','f-color']) {
+          const el = document.getElementById(id);
+          el.addEventListener('input', () => { generateJsonQr(); });
+        }
+        document.getElementById('btn-generate').addEventListener('click', generateJsonQr);
+        document.getElementById('btn-download').addEventListener('click', downloadJsonQr);
+        document.getElementById('btn-copy').addEventListener('click', copyShare);
+        // Overlay controls
+        const overlay = document.getElementById('overlay');
+        const vp = document.getElementById('viewport');
+        const sx = document.getElementById('ov-x');
+        const sy = document.getElementById('ov-y');
+        const ss = document.getElementById('ov-scale');
+        const sxNum = document.getElementById('ov-x-num');
+        const syNum = document.getElementById('ov-y-num');
+        const ssNum = document.getElementById('ov-scale-num');
+        function applyOverlay(){
+          // Position overlay relative to viewport top-left in page coordinates
+          const rect = vp.getBoundingClientRect();
+          // Stage uses grid centering; we can offset overlay relative to viewport by translating
+          const x = parseInt(sx.value, 10);
+          const y = parseInt(sy.value, 10);
+          const s = parseFloat(ss.value);
+          overlay.style.transform = `translate(${rect.left + window.scrollX + x}px, ${rect.top + window.scrollY + y}px) scale(${s})`;
+          overlay.style.transformOrigin = 'top left';
+          // sync numeric inputs
+          sxNum.value = x;
+          syNum.value = y;
+          ssNum.value = s.toFixed(2);
+        }
+        // bind both slider and number inputs
+        sx.addEventListener('input', applyOverlay);
+        sy.addEventListener('input', applyOverlay);
+        ss.addEventListener('input', applyOverlay);
+        sxNum.addEventListener('input', () => { sx.value = sxNum.value; applyOverlay(); });
+        syNum.addEventListener('input', () => { sy.value = syNum.value; applyOverlay(); });
+        ssNum.addEventListener('input', () => { ss.value = ssNum.value; applyOverlay(); });
+        document.getElementById('ov-reset').addEventListener('click', () => { sx.value = 0; sy.value = 0; ss.value = 1; applyOverlay(); });
+        // keep overlay locked to iframe position on resize/scroll
+        window.addEventListener('resize', applyOverlay);
+        window.addEventListener('scroll', applyOverlay, { passive: true });
+        applyOverlay();
+        await autoFillFromParamsOrNetwork();
+      });
+      
+    </script>
+  </body>
+  </html>
+
+
