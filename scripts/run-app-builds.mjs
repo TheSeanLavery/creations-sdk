@@ -3,7 +3,12 @@ import { join, dirname } from 'path';
 import { spawn } from 'child_process';
 
 const ROOT = process.cwd();
-const CREATIONS_DIR = join(ROOT, 'creations');
+const CREATIONS_DIR_LOWER = join(ROOT, 'creations');
+const CREATIONS_DIR_UPPER = join(ROOT, 'Creations');
+const CREATIONS_DIR = (await (async () => {
+  try { await stat(CREATIONS_DIR_LOWER); return CREATIONS_DIR_LOWER; } catch {}
+  return CREATIONS_DIR_UPPER;
+})());
 
 async function pathExists(p) {
   try { await stat(p); return true; } catch { return false; }

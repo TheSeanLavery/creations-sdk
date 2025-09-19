@@ -8,7 +8,19 @@ const os = require('os');
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
-const creationsDir = path.join(rootDir, 'creations');
+const creationsDirLower = path.join(rootDir, 'creations');
+const creationsDirUpper = path.join(rootDir, 'Creations');
+// Choose a default, but we will also dynamically resolve per-request
+const creationsDirDefault = fs.existsSync(creationsDirLower) ? creationsDirLower : creationsDirUpper;
+
+function resolveCreationsRootFor(relPath) {
+  // Try to resolve requested relative path against both case variants
+  const candidateLower = path.join(creationsDirLower, relPath);
+  const candidateUpper = path.join(creationsDirUpper, relPath);
+  try { if (fs.existsSync(candidateLower)) return creationsDirLower; } catch {}
+  try { if (fs.existsSync(candidateUpper)) return creationsDirUpper; } catch {}
+  return creationsDirDefault;
+}
 
 const port = process.env.PORT || 5000;
 
@@ -27,7 +39,9 @@ function resolveFilePath(urlPath) {
   // Route to specific mounted directories
   const mounts = [
     { base: '/public', dir: publicDir },
-    { base: '/creations', dir: creationsDir },
+    // Serve both lowercase and uppercase paths to be robust on case-sensitive hosts (e.g., Replit)
+    { base: '/creations', dir: null },
+    { base: '/Creations', dir: null },
   ];
 
   for (const { base, dir } of mounts) {
@@ -35,7 +49,12 @@ function resolveFilePath(urlPath) {
       const rel = safePath.slice(base.length);
       const normalizedRel = rel.replace(/^\/+/, '');
       const finalRel = normalizedRel || 'index.html';
-      return path.join(dir, finalRel);
+      if (dir) {
+        return path.join(dir, finalRel);
+      }
+      // Dynamic resolution for creations roots
+      const resolvedRoot = resolveCreationsRootFor(finalRel);
+      return path.join(resolvedRoot, finalRel);
     }
   }
 
@@ -89,10 +108,11 @@ const server = http.createServer((req, res) => {
 
       if (!payload) {
         try {
-          const entries = await fs.promises.readdir(creationsDir);
+          const dirToScan = fs.existsSync(creationsDirLower) ? creationsDirLower : creationsDirUpper;
+          const entries = await fs.promises.readdir(dirToScan);
           const items = [];
           for (const entry of entries) {
-            const dirPath = path.join(creationsDir, entry);
+            const dirPath = path.join(dirToScan, entry);
             let s;
             try { s = await fs.promises.stat(dirPath); } catch { continue; }
             if (!s.isDirectory()) continue;
@@ -100,6 +120,7 @@ const server = http.createServer((req, res) => {
             try {
               const idx = await fs.promises.stat(indexPath);
               if (idx.isFile()) {
+                // Always expose URLs under lowercase /creations for consistency
                 items.push({ label: entry, url: '/creations/' + entry + '/index.html' });
               }
             } catch { /* skip */ }
