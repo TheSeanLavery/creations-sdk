@@ -26,9 +26,10 @@ test.describe('Creations dropdown', () => {
       const apiLabels = json.items.map((i) => i.label);
       expect(uiLabels).toEqual(apiLabels);
 
-      // Select first and assert we navigated to any creation index (allow redirects)
+      // Select first and assert iframe src updates to a creation index
       await select.selectOption({ index: 1 });
-      await expect(page).toHaveURL(/\/creations\/.+\/index\.html$/);
+      const frame = page.locator('.viewport iframe');
+      await expect(frame).toHaveAttribute('src', /\/creations\/.+\/index\.html$/);
       await expect(page.locator('html')).toBeVisible();
     } else {
       await expect(select).toBeDisabled();

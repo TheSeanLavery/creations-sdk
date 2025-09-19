@@ -159,7 +159,7 @@
     <main>
       <div class="stage">
         <div class="viewport" id="viewport">
-          <iframe src="/ball/index.html" allow="camera; microphone; clipboard-read; clipboard-write; autoplay"></iframe>
+          <iframe src="about:blank" allow="camera; microphone; clipboard-read; clipboard-write; autoplay"></iframe>
         </div>
         <img id="overlay" class="overlay-img" src="/r1.png" alt="Overlay" />
       </div>
@@ -393,16 +393,28 @@
           } else {
             for (const item of items) {
               const opt = document.createElement('option');
-              opt.value = item.url; opt.textContent = item.label;
+              // Build an absolute URL anchored to the current origin
+              const path = (item.url || '').startsWith('/') ? item.url : `/${item.url || ''}`;
+              const href = new URL(path, window.location.origin).href;
+              opt.value = href;
+              opt.textContent = item.label || href;
               sel.appendChild(opt);
             }
             sel.disabled = false;
+            // Auto-select the first creation and load it into the iframe if none is loaded
+            const frame = document.querySelector('.viewport iframe');
+            const currentSrc = (frame && frame.getAttribute('src')) || '';
+            const shouldAutoSelect = !currentSrc || currentSrc === 'about:blank' || currentSrc.endsWith('/ball/index.html');
+            if (shouldAutoSelect && sel.options.length > 1) {
+              sel.selectedIndex = 1;
+              frame.src = sel.options[1].value;
+            }
           }
           sel.addEventListener('change', () => {
             if (!sel.value) return;
             const frame = document.querySelector('.viewport iframe');
             if (frame) {
-              frame.src = sel.value;
+              frame.src = sel.value; // absolute URL
             }
           });
         } catch (e) {

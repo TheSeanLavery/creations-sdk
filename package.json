@@ -10,7 +10,9 @@
     "start:open": "PORT=${PORT:-3012} node server.js & sleep 1 && open http://localhost:${PORT:-3012}/",
     "start:ball": "PORT=${PORT:-3012} node server.js & sleep 1 && open http://localhost:${PORT:-3012}/ball",
     "stop": "lsof -i tcp:${PORT:-3012} -sTCP:LISTEN -t 2>/dev/null | xargs -r kill -9",
-    "build:creations": "node ./scripts/generate-creations-json.mjs"
+    "build:creations": "node ./scripts/generate-creations-json.mjs",
+    "local": "npm run build:creations && PORT=${PORT:-3012} node server.js",
+    "local:e2e": "npm run build:creations && PORT=${PORT:-3012} node server.js & sleep 1 && npx playwright test tests/creations-console-and-screenshot.spec.js --headed; npm run stop"
   },
   "dependencies": {
     "qrcode": "^1.5.4"

@@ -49,9 +49,10 @@ test.describe('Creations dropdown diagnostics', () => {
     expect(consoleMsgs, 'No console errors or warnings are expected').toEqual([]);
     if (apiOk && Array.isArray(apiJson?.items) && apiJson.items.length > 0) {
       expect(optionTexts.length).toBeGreaterThan(1);
-      // Select the first real option and verify navigation
+      // Select the first real option and verify iframe updates
       await select.selectOption({ index: 1 });
-      await expect(page).toHaveURL(/\/creations\/.+\/index\.html$/);
+      const frame = page.locator('.viewport iframe');
+      await expect(frame).toHaveAttribute('src', /\/creations\/.+\/index\.html$/);
     } else {
       // If API is not OK, the UI should show failure state and be disabled
       expect(optionTexts.join('\n')).toMatch(/Failed to load creations|No creations found/);

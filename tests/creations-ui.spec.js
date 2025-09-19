@@ -25,9 +25,10 @@ test.describe('Creations dropdown UI', () => {
     // UI options should equal API items + placeholder
     expect(optionTexts.length).toBe(apiCount + 1);
 
-    // Select first real option and verify navigation
+    // Select first real option and verify iframe updates to selected creation
     await select.selectOption({ index: 1 });
-    await expect(page).toHaveURL(/\/creations\/.+\/index\.html$/);
+    const frame = page.locator('.viewport iframe');
+    await expect(frame).toHaveAttribute('src', /\/creations\/.+\/index\.html$/);
   });
 });
 

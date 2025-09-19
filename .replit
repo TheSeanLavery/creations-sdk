@@ -24,6 +24,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
+args = "npm ci"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
 args = "npm start"
 waitForPort = 5000
 

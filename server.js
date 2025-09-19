@@ -70,21 +70,56 @@ const server = http.createServer((req, res) => {
   const started = Date.now();
   const origUrl = req.url || '/';
 
-  // API: creations list via pre-generated file
+  // Suppress browser favicon requests causing console 404 noise
+  if (req.url === '/favicon.ico') {
+    res.writeHead(204, {
+      'Content-Type': 'image/x-icon',
+      'Cache-Control': 'no-store',
+    });
+    res.end();
+    return;
+  }
+
+  // API: creations list (serve pre-generated file, else scan top-level dirs)
   if (req.url && req.url.startsWith('/api/creations')) {
-    const creationsJsonPath = path.join(publicDir, 'creations.json');
-    fs.readFile(creationsJsonPath, (err, data) => {
-      if (err) {
-        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ items: [] }));
-        return;
+    (async () => {
+      const creationsJsonPath = path.join(publicDir, 'creations.json');
+      let payload = null;
+      try {
+        const text = await fs.promises.readFile(creationsJsonPath, 'utf8');
+        const parsed = JSON.parse(text);
+        if (parsed && Array.isArray(parsed.items)) payload = parsed;
+      } catch (_) {}
+
+      if (!payload) {
+        try {
+          const entries = await fs.promises.readdir(creationsDir);
+          const items = [];
+          for (const entry of entries) {
+            const dirPath = path.join(creationsDir, entry);
+            let s;
+            try { s = await fs.promises.stat(dirPath); } catch { continue; }
+            if (!s.isDirectory()) continue;
+            const indexPath = path.join(dirPath, 'index.html');
+            try {
+              const idx = await fs.promises.stat(indexPath);
+              if (idx.isFile()) {
+                items.push({ label: entry, url: '/creations/' + entry + '/index.html' });
+              }
+            } catch { /* skip */ }
+          }
+          payload = { items };
+        } catch {
+          payload = { items: [] };
+        }
       }
+
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
       });
-      res.end(data);
-    });
+      res.end(JSON.stringify(payload));
+    })();
     return;
   }
 
