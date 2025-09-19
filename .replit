@@ -39,5 +39,6 @@ localPort = 38193
 externalPort = 3000
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "gce"
 run = ["npm", "start"]
+publicDir = "public"
