@@ -1,12 +1,3 @@
 {
-  "items": [
-    {
-      "label": "bouncing_ball_game",
-      "url": "/creations/bouncing_ball_game/index.html"
-    },
-    {
-      "label": "plugin-demo",
-      "url": "/creations/plugin-demo/index.html"
-    }
-  ]
+  "items": []
 }
