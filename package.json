@@ -14,9 +14,13 @@
     "build:apps": "node ./scripts/run-app-builds.mjs",
     "local": "npm run build:apps && npm run build:creations && PORT=${PORT:-3012} node server.js",
     "local:open": "npm run build:apps && npm run build:creations && PORT=${PORT:-3012} node server.js & sleep 1 && open http://localhost:${PORT:-3012}/",
-    "local:e2e": "npm run build:apps && npm run build:creations && PORT=${PORT:-3012} node server.js & sleep 1 && npx playwright test tests/creations-console-and-screenshot.spec.js --headed; npm run stop"
+    "local:e2e": "npm run build:apps && npm run build:creations && PORT=${PORT:-3012} node server.js & sleep 1 && npx playwright test tests/creations-console-and-screenshot.spec.js --headed; npm run stop",
+    "test:accel": "npm run build:apps && npm run build:creations && PORT=${PORT:-3012} node server.js & sleep 1 && npx playwright test tests/accelerometer-emulator.spec.js --headed; npm run stop"
   },
   "dependencies": {
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.2"
   }
 }

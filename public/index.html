@@ -263,6 +263,54 @@
             </div>
           </div>
         </div>
+        <div class="card" id="emulator-card">
+          <strong>Emulator Controls</strong>
+          <div class="grid">
+            <div class="two">
+              <div>
+                <div class="label">Tilt X (-1..1)</div>
+                <div class="row">
+                  <input id="emu-tilt-x" class="input" type="range" min="-1" max="1" value="0" step="0.01" />
+                  <input id="emu-tilt-x-num" class="input" type="number" min="-1" max="1" step="0.01" value="0" style="width: 96px;" />
+                </div>
+              </div>
+              <div>
+                <div class="label">Tilt Y (-1..1)</div>
+                <div class="row">
+                  <input id="emu-tilt-y" class="input" type="range" min="-1" max="1" value="0" step="0.01" />
+                  <input id="emu-tilt-y-num" class="input" type="number" min="-1" max="1" step="0.01" value="0" style="width: 96px;" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="label">Tilt Z (-1..1)</div>
+              <div class="row">
+                <input id="emu-tilt-z" class="input" type="range" min="-1" max="1" value="1" step="0.01" />
+                <input id="emu-tilt-z-num" class="input" type="number" min="-1" max="1" step="0.01" value="1" style="width: 96px;" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="emu-reset" class="btn" type="button">Reset Tilt (R)</button>
+              <div style="flex:1"></div>
+              <div class="label">Freq</div>
+              <input id="emu-freq" class="input" type="number" min="1" max="120" step="1" value="60" style="width: 80px;" />
+            </div>
+            <div class="row">
+              <button id="emu-sideclick" class="btn" type="button">Side Click (Space)</button>
+              <button id="emu-longpress" class="btn" type="button">Long Press (hold Space)</button>
+            </div>
+            <div class="row">
+              <button id="emu-scroll-up" class="btn" type="button">Scroll Up (↑)</button>
+              <button id="emu-scroll-down" class="btn" type="button">Scroll Down (↓)</button>
+            </div>
+            <div class="row">
+              <label class="label" style="margin-right:8px;">Enable Emulator</label>
+              <input id="emu-enabled" type="checkbox" checked />
+              <div style="flex:1"></div>
+              <span id="emu-status" class="label">Active</span>
+            </div>
+          </div>
+        </div>
       </aside>
     </main>
     <script>
@@ -531,6 +579,7 @@
       });
       
     </script>
+    <script src="./js/emulator-shim.js"></script>
   </body>
   </html>
 
