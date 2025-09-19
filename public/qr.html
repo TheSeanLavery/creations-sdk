@@ -111,8 +111,8 @@
         const { preferred, all } = await resolveTargets();
         const target = preferred || window.location.origin + '/ball/';
         const img = document.getElementById('qr');
-        const api = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=1&data=' + encodeURIComponent(target);
-        img.src = api;
+        const { toDataURL } = await import('./js/qr-lib.js');
+        img.src = await toDataURL(target, { width: 320, margin: 1 });
         document.getElementById('preferred-url').textContent = target;
 
         const list = document.getElementById('all');
@@ -170,8 +170,8 @@
         }
         const img = document.getElementById('json-qr');
         const payload = JSON.stringify(data);
-        const api = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=1&data=' + encodeURIComponent(payload);
-        img.src = api;
+        const { toDataURL } = await import('./js/qr-lib.js');
+        img.src = await toDataURL(payload, { width: 320, margin: 1 });
         jsonUpdatePreview();
         jsonUpdateShareUrl();
       }

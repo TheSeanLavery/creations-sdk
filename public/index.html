@@ -312,8 +312,8 @@
         if (!data.title && !data.url && !data.description) return;
         const img = document.getElementById('json-qr-img');
         const payload = JSON.stringify(data);
-        const api = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=1&data=' + encodeURIComponent(payload);
-        img.src = api;
+        const { toDataURL } = await import('./js/qr-lib.js');
+        img.src = await toDataURL(payload, { width: 260, margin: 1 });
         updateShareUrl();
       }
       function downloadJsonQr(){
