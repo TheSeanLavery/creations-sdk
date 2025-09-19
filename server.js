@@ -10,6 +10,7 @@ const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const pluginDemoDir = path.join(rootDir, 'plugin-demo');
 const ballDir = path.join(rootDir, 'bouncing_ball_game', 'apps', 'static', '9twmvkSm7lLt');
+const creationsDir = path.join(rootDir, 'creations');
 
 const port = process.env.PORT || 5000;
 
@@ -30,6 +31,7 @@ function resolveFilePath(urlPath) {
     { base: '/public', dir: publicDir },
     { base: '/plugin-demo', dir: pluginDemoDir },
     { base: '/ball', dir: ballDir },
+    { base: '/creations', dir: creationsDir },
   ];
 
   for (const { base, dir } of mounts) {
@@ -67,6 +69,24 @@ const server = http.createServer((req, res) => {
   // Basic request logging to debug routing
   const started = Date.now();
   const origUrl = req.url || '/';
+
+  // API: creations list via pre-generated file
+  if (req.url && req.url.startsWith('/api/creations')) {
+    const creationsJsonPath = path.join(publicDir, 'creations.json');
+    fs.readFile(creationsJsonPath, (err, data) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ items: [] }));
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      res.end(data);
+    });
+    return;
+  }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });

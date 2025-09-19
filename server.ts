@@ -2,7 +2,7 @@ import { serve } from "bun";
 import { join, sep } from "path";
 import { stat, readdir } from "fs/promises";
 
-const PORT = parseInt(process.env.PORT || "3056", 10);
+const PORT = parseInt(process.env.PORT || "3012", 10);
 
 const ROOT_PUBLIC = join(process.cwd(), "public");
 const ROOT_CREATIONS = join(process.cwd(), "creations");
@@ -67,17 +67,30 @@ serve({
   async fetch(req) {
     const url = new URL(req.url);
     const pathname = url.pathname;
+    const method = req.method.toUpperCase();
+
+    const corsHeaders = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "Content-Type",
+    } as const;
 
     if (pathname === "/api/creations") {
+      if (method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders });
+      }
       const list = await listCreations();
-      return new Response(JSON.stringify({ items: list }), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ items: list }), { headers: { "content-type": "application/json", ...corsHeaders } });
     }
 
     // Optional: simple network info used by QR pages
     if (pathname === "/api/network-info") {
+      if (method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders });
+      }
       const proto = url.protocol.replace(":", "");
       const origin = `${proto}://${url.host}`;
-      return new Response(JSON.stringify({ byHeader: { ballUrl: origin + "/ball/" }, urlsByAddress: [] }), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ byHeader: { ballUrl: origin + "/ball/" }, urlsByAddress: [] }), { headers: { "content-type": "application/json", ...corsHeaders } });
     }
 
     const { mountDir, relativePath } = resolveMount(pathname);

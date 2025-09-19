@@ -5,11 +5,12 @@
   "description": "Static server to host plugin-demo and qr with a host page that iframes plugin-demo.",
   "license": "MIT",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "npm run build:creations && node server.js",
+    "dev": "npm run build:creations && node server.js",
     "start:open": "PORT=${PORT:-3012} node server.js & sleep 1 && open http://localhost:${PORT:-3012}/",
     "start:ball": "PORT=${PORT:-3012} node server.js & sleep 1 && open http://localhost:${PORT:-3012}/ball",
-    "stop": "lsof -i tcp:${PORT:-3012} -sTCP:LISTEN -t 2>/dev/null | xargs -r kill -9"
+    "stop": "lsof -i tcp:${PORT:-3012} -sTCP:LISTEN -t 2>/dev/null | xargs -r kill -9",
+    "build:creations": "node ./scripts/generate-creations-json.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4"
