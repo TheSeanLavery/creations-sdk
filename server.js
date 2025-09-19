@@ -1,5 +1,5 @@
 // Minimal static file server using Node's http/fs/path modules
-// Serves /plugin-demo and /public, with / hosting /public/index.html
+// Serves /public and /creations, with / hosting /public/index.html
 
 const http = require('http');
 const fs = require('fs');
@@ -8,9 +8,7 @@ const os = require('os');
 
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
-const pluginDemoDir = path.join(rootDir, 'plugin-demo');
-const ballDir = path.join(rootDir, 'bouncing_ball_game', 'apps', 'static', '9twmvkSm7lLt');
-const creationsDir = path.join(rootDir, 'Creations');
+const creationsDir = path.join(rootDir, 'creations');
 
 const port = process.env.PORT || 5000;
 
@@ -29,8 +27,6 @@ function resolveFilePath(urlPath) {
   // Route to specific mounted directories
   const mounts = [
     { base: '/public', dir: publicDir },
-    { base: '/plugin-demo', dir: pluginDemoDir },
-    { base: '/ball', dir: ballDir },
     { base: '/creations', dir: creationsDir },
   ];
 
@@ -171,8 +167,7 @@ server.listen(port, '0.0.0.0', () => {
   console.log('Paths:');
   console.log('  /                -> public/index.html');
   console.log('  /public          -> public/');
-  console.log('  /plugin-demo     -> plugin-demo/');
-  console.log('  /ball            -> bouncing_ball_game/apps/static/9twmvkSm7lLt/');
+  console.log('  /creations       -> creations/');
   console.log(`\nServer ready for Replit environment on port ${port}`);
   console.log('Access via: https://<repl-name>.<username>.repl.co/');
 });
