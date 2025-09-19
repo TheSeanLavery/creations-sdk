@@ -262,25 +262,10 @@
         return false;
       }
 
-      // Resolve the best ball demo URL for auto-fill
-      async function resolveBallUrl(){
-        try{
-          const res = await fetch('/api/network-info', { cache: 'no-store' });
-          const info = await res.json();
-          const entries = Array.isArray(info.urlsByAddress) ? info.urlsByAddress : [];
-          const privateEntry = entries.find(e => isPrivateIPv4(e.address));
-          const firstEntry = entries[0];
-          let candidate = privateEntry?.ballUrl || firstEntry?.ballUrl || null;
-          if (!candidate && info.byHeader?.ballUrl) {
-            candidate = info.byHeader.ballUrl;
-          }
-          if (!candidate) {
-            candidate = window.location.origin + '/ball/';
-          }
-          return candidate;
-        }catch(e){
-          return window.location.origin + '/ball/';
-        }
+      // Resolve the ball demo URL using the current domain
+      function resolveBallUrl(){
+        // Always use the current domain that the user is actually on
+        return window.location.origin + '/ball/';
       }
 
       // ===== JSON QR on main page =====
@@ -304,11 +289,10 @@
       }
       function updateShareUrl(){
         const data = getFormData();
-        const has = Object.values(data).some(v => v && v !== '#FE5000');
         const input = document.getElementById('share-url');
-        if (!has) { input.value = ''; return; }
-        const encoded = encodeBase64Url(JSON.stringify(data));
-        input.value = `${window.location.origin}/qr/?jsondata=${encoded}`;
+        if (!data.url) { input.value = ''; return; }
+        // Just use the direct URL from the form
+        input.value = data.url;
       }
       async function generateJsonQr(){
         const data = getFormData();
@@ -359,21 +343,17 @@
             return;
           } catch (_) { /* fallthrough */ }
         }
-        // 2) Else auto-fill URL from network info
-        try {
-          const url = await resolveBallUrl();
-          const data = {
-            title: 'Bouncing Ball',
-            url,
-            description: 'Scan to open the bouncing ball demo on your device',
-            iconUrl: '',
-            themeColor: '#FE5000'
-          };
-          applyDataToForm(data);
-          await generateJsonQr();
-        } catch (_) {
-          // ignore
-        }
+        // 2) Else auto-fill with ball demo URL using current domain
+        const url = resolveBallUrl();
+        const data = {
+          title: 'Bouncing Ball',
+          url,
+          description: 'Scan to open the bouncing ball demo on your device',
+          iconUrl: '',
+          themeColor: '#FE5000'
+        };
+        applyDataToForm(data);
+        await generateJsonQr();
       }
 
       document.addEventListener('DOMContentLoaded', async () => {

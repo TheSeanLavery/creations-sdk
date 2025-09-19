@@ -67,48 +67,6 @@ const server = http.createServer((req, res) => {
   // Basic request logging to debug routing
   const started = Date.now();
   const origUrl = req.url || '/';
-  // Simple API: network info
-  if (req.url && req.url.startsWith('/api/network-info')) {
-    const nets = os.networkInterfaces();
-    const addresses = [];
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name] || []) {
-        if (net.family === 'IPv4' && !net.internal) {
-          addresses.push(net.address);
-        }
-      }
-    }
-
-    const hostHeader = (req.headers['host'] || '').trim();
-    const protocol = 'http';
-    const urlsByAddress = addresses.map(address => ({
-      address,
-      hostUrl: `${protocol}://${address}:${port}/`,
-      pluginDemoUrl: `${protocol}://${address}:${port}/plugin-demo/`,
-      ballUrl: `${protocol}://${address}:${port}/ball/`,
-    }));
-
-    const payload = {
-      port,
-      protocol,
-      addresses,
-      hostHeader,
-      urlsByAddress,
-      byHeader: hostHeader ? {
-        hostUrl: `${protocol}://${hostHeader}/`,
-        pluginDemoUrl: `${protocol}://${hostHeader}/plugin-demo/`,
-        ballUrl: `${protocol}://${hostHeader}/ball/`,
-      } : null,
-    };
-
-    const body = Buffer.from(JSON.stringify(payload), 'utf8');
-    res.writeHead(200, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-    });
-    res.end(body);
-    return;
-  }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
