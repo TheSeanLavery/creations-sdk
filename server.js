@@ -1,5 +1,5 @@
 // Minimal static file server using Node's http/fs/path modules
-// Serves /plugin-demo, /qr, and /public, with / hosting /public/index.html
+// Serves /plugin-demo and /public, with / hosting /public/index.html
 
 const http = require('http');
 const fs = require('fs');
@@ -9,7 +9,6 @@ const os = require('os');
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const pluginDemoDir = path.join(rootDir, 'plugin-demo');
-const qrDir = path.join(rootDir, 'qr');
 const ballDir = path.join(rootDir, 'bouncing_ball_game', 'apps', 'static', '9twmvkSm7lLt');
 
 const port = process.env.PORT || 3012;
@@ -30,7 +29,6 @@ function resolveFilePath(urlPath) {
   const mounts = [
     { base: '/public', dir: publicDir },
     { base: '/plugin-demo', dir: pluginDemoDir },
-    { base: '/qr', dir: qrDir },
     { base: '/ball', dir: ballDir },
   ];
 
@@ -69,7 +67,7 @@ const server = http.createServer((req, res) => {
   // Basic request logging to debug routing
   const started = Date.now();
   const origUrl = req.url || '/';
-  // Simple API: network info for QR usage
+  // Simple API: network info
   if (req.url && req.url.startsWith('/api/network-info')) {
     const nets = os.networkInterfaces();
     const addresses = [];
@@ -88,7 +86,6 @@ const server = http.createServer((req, res) => {
       hostUrl: `${protocol}://${address}:${port}/`,
       pluginDemoUrl: `${protocol}://${address}:${port}/plugin-demo/`,
       ballUrl: `${protocol}://${address}:${port}/ball/`,
-      qrPageUrl: `${protocol}://${address}:${port}/qr.html`,
     }));
 
     const payload = {
@@ -101,7 +98,6 @@ const server = http.createServer((req, res) => {
         hostUrl: `${protocol}://${hostHeader}/`,
         pluginDemoUrl: `${protocol}://${hostHeader}/plugin-demo/`,
         ballUrl: `${protocol}://${hostHeader}/ball/`,
-        qrPageUrl: `${protocol}://${hostHeader}/qr.html`,
       } : null,
     };
 
@@ -158,7 +154,5 @@ server.listen(port, () => {
   console.log('  /                -> public/index.html');
   console.log('  /public          -> public/');
   console.log('  /plugin-demo     -> plugin-demo/');
-  console.log('  /qr              -> qr/');
-  console.log('  /qr.html         -> public/qr.html');
   console.log('  /ball            -> bouncing_ball_game/apps/static/9twmvkSm7lLt/');
 });
