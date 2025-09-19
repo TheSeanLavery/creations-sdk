@@ -151,6 +151,9 @@
       <div class="bar">
         <strong>Host</strong>
         <span class="url">/ball</span>
+        <div style="flex:1"></div>
+        <label class="label" for="creation-select">Open creation:</label>
+        <select id="creation-select" class="input" style="width: 260px;"></select>
       </div>
     </header>
     <main>
@@ -374,6 +377,25 @@
       }
 
       document.addEventListener('DOMContentLoaded', async () => {
+        // Populate creations dropdown
+        try {
+          const res = await fetch('/api/creations', { cache: 'no-store' });
+          const data = await res.json();
+          const sel = document.getElementById('creation-select');
+          sel.innerHTML = '';
+          const def = document.createElement('option');
+          def.value = ''; def.textContent = 'Select a creation…';
+          sel.appendChild(def);
+          for (const item of (data.items || [])) {
+            const opt = document.createElement('option');
+            opt.value = item.url; opt.textContent = item.label;
+            sel.appendChild(opt);
+          }
+          sel.addEventListener('change', () => {
+            if (sel.value) window.location.href = sel.value;
+          });
+        } catch (_) { /* ignore */ }
+
         for (const id of ['f-title','f-url','f-description','f-icon','f-color']) {
           const el = document.getElementById(id);
           el.addEventListener('input', () => { generateJsonQr(); });
