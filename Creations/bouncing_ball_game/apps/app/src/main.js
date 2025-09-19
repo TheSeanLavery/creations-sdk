@@ -32,16 +32,19 @@ let ball = {
 
 let platforms = [];
 let canvas, ctx;
+let startingPlatform = null;
 
 // Game constants
-const GRAVITY = 0.5;
-const BOUNCE_DAMPING = 0.8;
+const GRAVITY = 0.1;
+const BOUNCE_IMPULSE = 6.5; // fixed upward velocity on bounce
 const HORIZONTAL_SPEED = 3;
 const PLATFORM_WIDTH = 60;
 const PLATFORM_HEIGHT = 8;
 const GROUND_Y = 260;
 const SCREEN_WIDTH = 240;
-const SCREEN_HEIGHT = 282;
+const SCREEN_HEIGHT = 254;
+const SCROLL_THRESHOLD = 100; // screenspace Y threshold
+const SCROLL_SPEED_MULTIPLIER = 0.2; // scales how fast the camera moves up
 
 // Platform generation
 function generatePlatform(y) {
@@ -67,9 +70,21 @@ function initializePlatforms() {
     isGround: true
   });
   
-  // Generate platforms going upward
+  // Create starting platform higher than ground
+  const startY = GROUND_Y - 60;
+  startingPlatform = {
+    x: Math.floor((SCREEN_WIDTH - PLATFORM_WIDTH) / 2),
+    y: startY,
+    width: PLATFORM_WIDTH,
+    height: PLATFORM_HEIGHT,
+    color: '#fff',
+    isStart: true
+  };
+  platforms.push(startingPlatform);
+  
+  // Generate platforms going upward from the starting platform
   for (let i = 1; i <= 20; i++) {
-    platforms.push(generatePlatform(GROUND_Y - (i * 80)));
+    platforms.push(generatePlatform(startY - (i * 80)));
   }
 }
 
@@ -101,9 +116,13 @@ function updatePhysics() {
     gameState.gameStarted = true;
   }
   
-  // Update screen scrolling only after game started
-  if (gameState.gameStarted && ball.y < gameState.screenScrollY + 100) {
-    gameState.screenScrollY = ball.y - 100;
+  // Update screen scrolling: scale upward movement based on screenspace distance past threshold
+  if (gameState.gameStarted) {
+    const ballScreenY = ball.y - gameState.screenScrollY;
+    if (ballScreenY < SCROLL_THRESHOLD) {
+      const overshoot = SCROLL_THRESHOLD - ballScreenY;
+      gameState.screenScrollY += overshoot * SCROLL_SPEED_MULTIPLIER;
+    }
   }
   
   // Update score based on highest point reached
@@ -114,7 +133,7 @@ function updatePhysics() {
   }
   
   // Increase platform speed over time
-  gameState.platformSpeed = 1 + (gameState.score * 0.01);
+  gameState.platformSpeed = .2 + (gameState.score * 0.01);
   
   // Move platforms down
   platforms.forEach(platform => {
@@ -150,7 +169,8 @@ function checkCollisions() {
       // Ball is above platform and moving down
       if (ball.velocityY > 0 && ball.y < platform.y) {
         ball.y = platform.y - ball.radius;
-        ball.velocityY = -ball.velocityY * BOUNCE_DAMPING;
+        // Apply fixed upward bounce impulse
+        ball.velocityY = -BOUNCE_IMPULSE;
         ball.onGround = true;
         
         // Play landing sound effect (visual feedback)
@@ -212,15 +232,21 @@ function startGame() {
   gameState.platformSpeed = 1;
   gameState.gameStarted = false;
   
-  // Reset ball
-  ball.x = 120;
-  ball.y = 200;
+  // Initialize platforms first
+  initializePlatforms();
+  
+  // Reset ball and place it on top of the starting platform
   ball.velocityX = 0;
   ball.velocityY = 0;
   ball.onGround = true;
-  
-  // Initialize platforms
-  initializePlatforms();
+  if (startingPlatform) {
+    ball.x = startingPlatform.x + (startingPlatform.width / 2);
+    ball.y = startingPlatform.y - ball.radius;
+  } else {
+    // Fallback to center if starting platform missing
+    ball.x = 120;
+    ball.y = 200;
+  }
   
   // Hide game over screen
   document.getElementById('gameOver').classList.add('hidden');

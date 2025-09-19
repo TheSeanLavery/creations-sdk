@@ -80,15 +80,18 @@ if [ ! -f "src/lib/device-controls.js" ]; then
     cp ../../libs/*.js src/lib/
 fi
 
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
+# Install dependencies if needed (prefer ci)
+if [ ! -d "node_modules" ] || [ ! -f "node_modules/.bin/vite" ]; then
     echo -e "${YELLOW}Installing dependencies...${NC}"
-    npm install
+    npm ci || npm install
 fi
 
 # Build the project
 echo -e "${BLUE}Building project...${NC}"
-npm run build
+if ! npm run build; then
+    echo -e "${YELLOW}npm run build failed, attempting npx vite build...${NC}"
+    npx vite build || ./node_modules/.bin/vite build || exit 1
+fi
 
 # Create static directory if it doesn't exist
 mkdir -p "$STATIC_DIR"
@@ -101,19 +104,26 @@ cp -r dist "$STATIC_DIR/$PROJECT_NAME"
 # Update paths in the built files to work with subdirectory
 # Fix asset paths to be relative
 cd "$STATIC_DIR/$PROJECT_NAME"
-# Cross-platform sed (works on both macOS and Linux)
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    find . -name "*.html" -exec sed -i'' 's|href="/|href="./|g' {} \;
-    find . -name "*.html" -exec sed -i'' 's|src="/|src="./|g' {} \;
-    find . -name "*.js" -exec sed -i'' 's|from "/|from "./|g' {} \;
-else
-    # Linux
-    find . -name "*.html" -exec sed -i 's|href="/|href="./|g' {} \;
-    find . -name "*.html" -exec sed -i 's|src="/|src="./|g' {} \;
-    find . -name "*.js" -exec sed -i 's|from "/|from "./|g' {} \;
-fi
+# Normalize asset paths to be relative using portable in-place editing
+find . -name "*.html" -exec sed -i.bak 's|href="/|href="./|g' {} +
+find . -name "*.html" -exec sed -i.bak 's|src="/|src="./|g' {} +
+find . -name "*.js" -exec sed -i.bak 's|from "/|from "./|g' {} +
+# Remove backup files
+find . -name "*.bak" -delete
 cd - > /dev/null
+
+# Update upper-level redirect index.html in creations/bouncing_ball_game
+UPPER_INDEX="$(cd .. && cd .. && pwd)/index.html"
+if [ -f "$UPPER_INDEX" ]; then
+  # Replace any existing apps/static/* path with the new one
+  REL_PATH="apps/static/$PROJECT_NAME/index.html"
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -E -i '' "s|apps/static/[A-Za-z0-9]+/index.html|$REL_PATH|g" "$UPPER_INDEX"
+  else
+    sed -E -i "s|apps/static/[A-Za-z0-9]+/index.html|$REL_PATH|g" "$UPPER_INDEX"
+  fi
+  echo -e "${BLUE}Updated upper index.html to point to ${GREEN}$REL_PATH${NC}"
+fi
 
 echo -e "${GREEN}Build complete!${NC}"
 echo -e "${BLUE}Your project is available at:${NC}"
