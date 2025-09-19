@@ -17,12 +17,12 @@
         flex-direction: column;
       }
       .under-controls {
+        position: absolute; /* detach from flow so it does not push game */
         width: 240px;
-        margin-top: 8px;
-        margin-left: -50px; /* align with viewport offset */
         display: flex;
         flex-direction: column;
         gap: 8px;
+        z-index: 50;
       }
       header {
         padding: 12px 16px;
@@ -39,16 +39,18 @@
       main {
         flex: 1;
         display: grid;
-        grid-template-columns: 1fr 360px;
+        grid-template-columns: 300px 1fr 360px; /* left controls, stage, right sidebar */
         align-items: stretch;
         gap: 0;
       }
+      /* Prevent controls panel from shrinking or reflowing */
+      .controls-panel { min-width: 300px; max-width: 300px; }
       .stage {
         min-width: 0;
         display: grid;
         place-items: start center; /* top align, center horizontally within its grid column */
         position: relative;
-        padding-top: 100px; /* top padding */
+        padding-top: 100px; /* original spacing below header */
       }
       .viewport {
         position: relative;
@@ -58,7 +60,7 @@
         border: 1px solid #e2e8f0;
         border-radius: 0;
         overflow: hidden;
-        z-index: 1;
+        z-index: 200; /* below overlay (300), below input panel (350) */
         margin-left: -50px; /* offset 50px left of column center */
       }
       .statusbar {
@@ -92,17 +94,37 @@
         /* native scale */
       }
       .overlay-img {
-        position: absolute;
-        top: 0;
-        left: 0;
+        position: fixed;
         width: auto;
         height: auto;
         max-width: none;
         pointer-events: none;
-        transform: none;
         transform-origin: top left;
         image-rendering: auto;
-        z-index: 100;
+        z-index: 300; /* above viewport */
+      }
+      .input-panel {
+        position: fixed;
+        width: 44px;
+        height: 254px; /* match iframe content height */
+        background: rgba(14, 165, 233, 0.08);
+        border: 1px dashed rgba(14,165,233,0.35);
+        border-radius: 6px;
+        box-sizing: border-box;
+        z-index: 350; /* above overlay (300), above viewport (200) */
+        cursor: pointer;
+        user-select: none;
+      }
+      .controls-panel {
+        border-right: 1px solid #e2e8f0;
+        background: #ffffff;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        height: 100%;
+        overflow: auto;
+        overscroll-behavior: contain;
       }
       aside {
         border-left: 1px solid #e2e8f0;
@@ -185,6 +207,127 @@
       </div>
     </header>
     <main>
+      <div class="controls-panel" id="controls-panel">
+        <div class="card" id="overlay-card">
+          <strong>Overlay Controls</strong>
+          <div class="grid">
+            <div>
+              <div class="label">X Position</div>
+              <div class="row">
+                <input id="ov-x" class="input" type="range" min="-240" max="240" value="-93" step="1" />
+                <input id="ov-x-num" class="input" type="number" min="-240" max="240" step="1" value="-93" style="width: 96px;" />
+              </div>
+            </div>
+            <div>
+              <div class="label">Y Position</div>
+              <div class="row">
+                <input id="ov-y" class="input" type="range" min="-240" max="240" value="-17" step="1" />
+                <input id="ov-y-num" class="input" type="number" min="-240" max="240" step="1" value="-17" style="width: 96px;" />
+              </div>
+            </div>
+            <div>
+              <div class="label">Overlay Scale</div>
+              <div class="row">
+                <input id="ov-scale" class="input" type="range" min="0.4" max="1" step="0.001" value="0.49" />
+                <input id="ov-scale-num" class="input" type="number" min="0.4" max="1" step="0.001" value="0.49" style="width: 96px;" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="ov-reset" class="btn" type="button">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="panel-card">
+          <strong>Scroll Panel Controls</strong>
+          <div class="grid">
+            <div class="two">
+              <div>
+                <div class="label">Panel X Offset (px)</div>
+                <div class="row">
+                  <input id="panel-x" class="input" type="range" min="0" max="200" value="30" step="1" />
+                  <input id="panel-x-num" class="input" type="number" min="0" max="200" step="1" value="30" style="width: 96px;" />
+                </div>
+              </div>
+              <div>
+                <div class="label">Panel Y Offset (px)</div>
+                <div class="row">
+                  <input id="panel-y" class="input" type="range" min="0" max="200" value="1" step="1" />
+                  <input id="panel-y-num" class="input" type="number" min="0" max="200" step="1" value="1" style="width: 96px;" />
+                </div>
+              </div>
+            </div>
+            <div class="two">
+              <div>
+                <div class="label">Panel Width (px)</div>
+                <div class="row">
+                  <input id="panel-w" class="input" type="range" min="24" max="120" value="120" step="1" />
+                  <input id="panel-w-num" class="input" type="number" min="24" max="120" step="1" value="120" style="width: 96px;" />
+                </div>
+              </div>
+              <div>
+                <div class="label">Panel Height (px)</div>
+                <div class="row">
+                  <input id="panel-h" class="input" type="range" min="80" max="300" value="254" step="1" />
+                  <input id="panel-h-num" class="input" type="number" min="80" max="300" step="1" value="254" style="width: 96px;" />
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <button id="panel-reset" class="btn" type="button">Reset Panel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="emulator-card">
+          <strong>Emulator Controls</strong>
+          <div class="grid">
+            <div class="two">
+              <div>
+                <div class="label">Tilt X (-1..1)</div>
+                <div class="row">
+                  <input id="emu-tilt-x" class="input" type="range" min="-1" max="1" value="0" step="0.01" />
+                  <input id="emu-tilt-x-num" class="input" type="number" min="-1" max="1" step="0.01" value="0" style="width: 96px;" />
+                </div>
+              </div>
+              <div>
+                <div class="label">Tilt Y (-1..1)</div>
+                <div class="row">
+                  <input id="emu-tilt-y" class="input" type="range" min="-1" max="1" value="0" step="0.01" />
+                  <input id="emu-tilt-y-num" class="input" type="number" min="-1" max="1" step="0.01" value="0" style="width: 96px;" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="label">Tilt Z (-1..1)</div>
+              <div class="row">
+                <input id="emu-tilt-z" class="input" type="range" min="-1" max="1" value="1" step="0.01" />
+                <input id="emu-tilt-z-num" class="input" type="number" min="-1" max="1" step="0.01" value="1" style="width: 96px;" />
+              </div>
+            </div>
+            <div class="row">
+              <button id="emu-reset" class="btn" type="button">Reset Tilt (R)</button>
+              <div style="flex:1"></div>
+              <div class="label">Freq</div>
+              <input id="emu-freq" class="input" type="number" min="1" max="120" step="1" value="60" style="width: 80px;" />
+            </div>
+            <div class="row">
+              <button id="emu-sideclick" class="btn" type="button">Side Click (Space)</button>
+              <button id="emu-longpress" class="btn" type="button">Long Press (hold Space)</button>
+            </div>
+            <div class="row">
+              <button id="emu-scroll-up" class="btn" type="button">Scroll Up (↑)</button>
+              <button id="emu-scroll-down" class="btn" type="button">Scroll Down (↓)</button>
+            </div>
+            <div class="row">
+              <label class="label" style="margin-right:8px;">Enable Emulator</label>
+              <input id="emu-enabled" type="checkbox" checked />
+              <div style="flex:1"></div>
+              <span id="emu-status" class="label">Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="stage">
         <div class="viewport" id="viewport">
           <div class="statusbar" id="statusbar">
@@ -195,85 +338,8 @@
           <iframe src="about:blank" allow="camera; microphone; clipboard-read; clipboard-write; autoplay"></iframe>
         </div>
         <img id="overlay" class="overlay-img" src="/r1.png" alt="Overlay" />
-        <div class="under-controls">
-          <div class="card" id="overlay-card">
-            <strong>Overlay Controls</strong>
-            <div class="grid">
-              <div>
-                <div class="label">X Position</div>
-                <div class="row">
-                  <input id="ov-x" class="input" type="range" min="-240" max="240" value="-31" step="1" />
-                  <input id="ov-x-num" class="input" type="number" min="-240" max="240" step="1" value="-31" style="width: 96px;" />
-                </div>
-              </div>
-              <div>
-                <div class="label">Y Position</div>
-                <div class="row">
-                  <input id="ov-y" class="input" type="range" min="-240" max="240" value="-91" step="1" />
-                  <input id="ov-y-num" class="input" type="number" min="-240" max="240" step="1" value="-91" style="width: 96px;" />
-                </div>
-              </div>
-              <div>
-                <div class="label">Overlay Scale</div>
-                <div class="row">
-                  <input id="ov-scale" class="input" type="range" min="0.4" max="1" step="0.001" value="0.49" />
-                  <input id="ov-scale-num" class="input" type="number" min="0.4" max="1" step="0.001" value="0.49" style="width: 96px;" />
-                </div>
-              </div>
-              <div class="row">
-                <button id="ov-reset" class="btn" type="button">Reset</button>
-              </div>
-            </div>
-          </div>
-          <div class="card" id="emulator-card">
-            <strong>Emulator Controls</strong>
-            <div class="grid">
-              <div class="two">
-                <div>
-                  <div class="label">Tilt X (-1..1)</div>
-                  <div class="row">
-                    <input id="emu-tilt-x" class="input" type="range" min="-1" max="1" value="0" step="0.01" />
-                    <input id="emu-tilt-x-num" class="input" type="number" min="-1" max="1" step="0.01" value="0" style="width: 96px;" />
-                  </div>
-                </div>
-                <div>
-                  <div class="label">Tilt Y (-1..1)</div>
-                  <div class="row">
-                    <input id="emu-tilt-y" class="input" type="range" min="-1" max="1" value="0" step="0.01" />
-                    <input id="emu-tilt-y-num" class="input" type="number" min="-1" max="1" step="0.01" value="0" style="width: 96px;" />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <div class="label">Tilt Z (-1..1)</div>
-                <div class="row">
-                  <input id="emu-tilt-z" class="input" type="range" min="-1" max="1" value="1" step="0.01" />
-                  <input id="emu-tilt-z-num" class="input" type="number" min="-1" max="1" step="0.01" value="1" style="width: 96px;" />
-                </div>
-              </div>
-              <div class="row">
-                <button id="emu-reset" class="btn" type="button">Reset Tilt (R)</button>
-                <div style="flex:1"></div>
-                <div class="label">Freq</div>
-                <input id="emu-freq" class="input" type="number" min="1" max="120" step="1" value="60" style="width: 80px;" />
-              </div>
-              <div class="row">
-                <button id="emu-sideclick" class="btn" type="button">Side Click (Space)</button>
-                <button id="emu-longpress" class="btn" type="button">Long Press (hold Space)</button>
-              </div>
-              <div class="row">
-                <button id="emu-scroll-up" class="btn" type="button">Scroll Up (↑)</button>
-                <button id="emu-scroll-down" class="btn" type="button">Scroll Down (↓)</button>
-              </div>
-              <div class="row">
-                <label class="label" style="margin-right:8px;">Enable Emulator</label>
-                <input id="emu-enabled" type="checkbox" checked />
-                <div style="flex:1"></div>
-                <span id="emu-status" class="label">Active</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div id="input-panel" class="input-panel" title="Scroll here • Click for Side Button"></div>
+        
       </div>
       <aside>
         <div class="card">
@@ -444,8 +510,9 @@
         const params = new URLSearchParams(window.location.search);
         const ovParam = (params.get('overlay') || '').toLowerCase();
         const showOverlay = ['1','true','on','yes'].includes(ovParam);
+        // Always show debug sliders; if you want to hide, pass ?overlay=off
         const overlayCard = document.getElementById('overlay-card');
-        if (!showOverlay && overlayCard) overlayCard.style.display = 'none';
+        if (!showOverlay && overlayCard) overlayCard.style.display = '';
         // Populate creations dropdown
         try {
           // Prefer static file pre-generated by build script to avoid API routing issues
@@ -529,13 +596,35 @@
         function applyOverlay(){
           // Position overlay relative to viewport top-left in page coordinates
           const rect = vp.getBoundingClientRect();
+          const stage = document.querySelector('.stage');
+          const srect = stage ? stage.getBoundingClientRect() : { left: 0, top: 0 };
           // Stage uses grid centering; we can offset overlay relative to viewport by translating
           const x = parseInt(sx.value, 10);
-          // Move overlay up by the status bar height so it remains aligned with game content
-          const y = parseInt(sy.value, 10) - STATUSBAR_HEIGHT;
+          const y = parseInt(sy.value, 10);
           const s = parseFloat(ss.value);
-          overlay.style.transform = `translate(${rect.left + window.scrollX + x}px, ${rect.top + window.scrollY + y}px) scale(${s})`;
+          // Position overlay relative to the iframe (viewport) in page coordinates
+          const pageLeft = rect.left + x;
+          const pageTop = rect.top + (y - STATUSBAR_HEIGHT);
+          overlay.style.left = `${pageLeft}px`;
+          overlay.style.top = `${pageTop}px`;
+          overlay.style.transform = `scale(${s})`;
           overlay.style.transformOrigin = 'top left';
+          // Position input panel to the right of the viewport content area
+          const panel = document.getElementById('input-panel');
+          if (panel) {
+            const px = parseInt(document.getElementById('panel-x')?.value || '8', 10);
+            const py = parseInt(document.getElementById('panel-y')?.value || '0', 10);
+            const pw = parseInt(document.getElementById('panel-w')?.value || '44', 10);
+            const ph = parseInt(document.getElementById('panel-h')?.value || '254', 10);
+            // Anchor panel to the iframe's right edge in page coordinates; do not clamp to stage
+            const pLeft = rect.right + px;
+            const pTop = rect.top + STATUSBAR_HEIGHT + py;
+            panel.style.left = `${pLeft}px`;
+            panel.style.top = `${pTop}px`;
+            panel.style.transform = '';
+            panel.style.width = `${pw}px`;
+            panel.style.height = `${ph}px`;
+          }
           // sync numeric inputs
           sxNum.value = x;
           syNum.value = y;
@@ -549,14 +638,88 @@
         syNum.addEventListener('input', () => { sy.value = syNum.value; applyOverlay(); });
         ssNum.addEventListener('input', () => { ss.value = ssNum.value; applyOverlay(); });
         document.getElementById('ov-reset').addEventListener('click', () => { sx.value = -31; sy.value = -91; ss.value = 0.49; applyOverlay(); });
-        // keep overlay locked to iframe position on resize/scroll
+        // keep overlay, panel, and under-controls locked to iframe position on resize/scroll
         window.addEventListener('resize', applyOverlay);
         window.addEventListener('scroll', applyOverlay, { passive: true });
-        // Ensure defaults are applied on load
-        sx.value = '-31';
-        sy.value = '-91';
+        // React to viewport size/layout changes precisely
+        try {
+          const ro = new ResizeObserver(() => applyOverlay());
+          ro.observe(vp);
+        } catch (_) { /* ignore if not supported */ }
+        // Set requested defaults
+        sx.value = '-33';
+        sy.value = '-17';
         ss.value = '0.49';
         applyOverlay();
+        // Input panel interactions: wheel -> scrollUp/Down, click -> sideClick
+        (function bindInputPanel(){
+          const panel = document.getElementById('input-panel');
+          if (!panel) return;
+          panel.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const dir = (e.deltaY || 0) > 0 ? 'down' : 'up';
+            // Dispatch to iframe via emulator shim’s global handler
+            try {
+              const frameWin = document.querySelector('.viewport iframe')?.contentWindow;
+              if (frameWin) {
+                // Smooth scroll and custom event to match device behavior
+                frameWin.scrollBy({ top: dir === 'down' ? 80 : -80, behavior: 'smooth' });
+                frameWin.dispatchEvent(new CustomEvent(dir === 'down' ? 'scrollDown' : 'scrollUp', { detail: { source: 'panel' } }));
+              }
+            } catch (_) {}
+          }, { passive: false });
+
+          // Click maps to side button
+          panel.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              const frameWin = document.querySelector('.viewport iframe')?.contentWindow;
+              frameWin?.dispatchEvent(new CustomEvent('sideClick', { detail: { source: 'panel' } }));
+            } catch (_) {}
+          });
+          // Panel sliders wiring
+          const pairs = [
+            ['panel-x','panel-x-num'],
+            ['panel-y','panel-y-num'],
+            ['panel-w','panel-w-num'],
+            ['panel-h','panel-h-num'],
+          ];
+          for (const [rId, nId] of pairs) {
+            const r = document.getElementById(rId);
+            const n = document.getElementById(nId);
+            if (r) r.addEventListener('input', () => { if (n) n.value = r.value; applyOverlay(); });
+            if (n) n.addEventListener('input', () => { if (r) r.value = n.value; applyOverlay(); });
+          }
+          const resetBtn = document.getElementById('panel-reset');
+          if (resetBtn) resetBtn.addEventListener('click', () => {
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = String(v); };
+            set('panel-x', 8); set('panel-x-num', 8);
+            set('panel-y', 28); set('panel-y-num', 28);
+            set('panel-w', 44); set('panel-w-num', 44);
+            set('panel-h', 254); set('panel-h-num', 254);
+            applyOverlay();
+          });
+        })();
+
+        // Position under-controls below the viewport (absolute)
+        (function positionUnderControls(){
+          const uc = document.getElementById('under-controls');
+          const stage = document.querySelector('.stage');
+          const vpRect = vp.getBoundingClientRect();
+          const stRect = stage ? stage.getBoundingClientRect() : { left: 0, top: 0 };
+          const ucLeft = (vpRect.left - stRect.left);
+          const ucTop = (vpRect.bottom - stRect.top) + 8; // 8px gap
+          if (uc) {
+            uc.style.left = `${ucLeft}px`;
+            uc.style.top = `${ucTop}px`;
+          }
+          // Reposition on changes
+          window.addEventListener('resize', positionUnderControls);
+          window.addEventListener('scroll', positionUnderControls, { passive: true });
+        })();
+
         // Simple time display (center)
         function pad2(n){ return String(n).padStart(2,'0'); }
         function updateTime(){
