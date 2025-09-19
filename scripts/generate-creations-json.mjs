@@ -2,7 +2,7 @@ import { readdir, stat, writeFile } from 'fs/promises';
 import { join, posix } from 'path';
 
 const ROOT = process.cwd();
-const CREATIONS_DIR = join(ROOT, 'creations');
+const CREATIONS_DIR = join(ROOT, 'Creations');
 const OUTPUT = join(ROOT, 'public', 'creations.json');
 
 async function listCreations() {

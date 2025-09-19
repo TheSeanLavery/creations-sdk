@@ -10,7 +10,7 @@ const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const pluginDemoDir = path.join(rootDir, 'plugin-demo');
 const ballDir = path.join(rootDir, 'bouncing_ball_game', 'apps', 'static', '9twmvkSm7lLt');
-const creationsDir = path.join(rootDir, 'creations');
+const creationsDir = path.join(rootDir, 'Creations');
 
 const port = process.env.PORT || 5000;
 
