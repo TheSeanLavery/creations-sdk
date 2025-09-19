@@ -44,7 +44,7 @@ const GROUND_Y = 260;
 const SCREEN_WIDTH = 240;
 const SCREEN_HEIGHT = 254;
 const SCROLL_THRESHOLD = 100; // screenspace Y threshold
-const SCROLL_SPEED_MULTIPLIER = 0.2; // scales how fast the camera moves up
+const SCROLL_SPEED_MULTIPLIER = -0.2; // scales how fast the camera moves up
 
 // Platform generation
 function generatePlatform(y) {
