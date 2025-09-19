@@ -11,7 +11,7 @@ const publicDir = path.join(rootDir, 'public');
 const pluginDemoDir = path.join(rootDir, 'plugin-demo');
 const ballDir = path.join(rootDir, 'bouncing_ball_game', 'apps', 'static', '9twmvkSm7lLt');
 
-const port = process.env.PORT || 3012;
+const port = process.env.PORT || 5000;
 
 /**
  * Resolve request URL to a file path under allowed roots.
@@ -137,7 +137,12 @@ const server = http.createServer((req, res) => {
         res.end('Internal Server Error');
         return;
       }
-      res.writeHead(200, { 'Content-Type': getContentType(filePath) });
+      res.writeHead(200, { 
+        'Content-Type': getContentType(filePath),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
       if (req.method === 'HEAD') {
         res.end();
       } else {
@@ -148,11 +153,13 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`Server running at http://0.0.0.0:${port}`);
   console.log('Paths:');
   console.log('  /                -> public/index.html');
   console.log('  /public          -> public/');
   console.log('  /plugin-demo     -> plugin-demo/');
   console.log('  /ball            -> bouncing_ball_game/apps/static/9twmvkSm7lLt/');
+  console.log(`\nServer ready for Replit environment on port ${port}`);
+  console.log('Access via: https://<repl-name>.<username>.repl.co/');
 });
