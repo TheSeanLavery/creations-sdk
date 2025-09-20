@@ -182,14 +182,20 @@ function updatePhysics() {
     gameState.gameStarted = true;
   }
   
-  // Update screen scrolling: scale upward movement based on screenspace distance past threshold
+  // Update camera in world space: follow target = ball.y - SCROLL_THRESHOLD
   if (gameState.gameStarted) {
-    const ballScreenY = ball.y - gameState.screenScrollY;
-    if (ballScreenY < SCROLL_THRESHOLD) {
-      const overshoot = SCROLL_THRESHOLD - ballScreenY;
-      previousScreenScrollY = gameState.screenScrollY;
-      gameState.screenScrollY += overshoot * SCROLL_SPEED_MULTIPLIER;
+    const desiredScrollY = ball.y - SCROLL_THRESHOLD;
+    const isMovingUp = ball.velocityY < 0;
+    const baseFollow = 0.12; // smooth follow baseline per physics step
+    const velocityBoost = Math.min(0.25, Math.max(0, -ball.velocityY) * 0.02); // boost when going up
+    const followFactor = Math.min(0.45, baseFollow + (isMovingUp ? velocityBoost : 0));
+    previousScreenScrollY = gameState.screenScrollY;
+    let nextScroll = lerp(gameState.screenScrollY, desiredScrollY, followFactor);
+    // Prevent camera from moving downward (only allow upward progress)
+    if (nextScroll > gameState.screenScrollY) {
+      nextScroll = gameState.screenScrollY;
     }
+    gameState.screenScrollY = nextScroll;
   }
   
   // Update score based on highest point reached
