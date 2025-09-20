@@ -434,7 +434,11 @@
         const get = id => document.getElementById(id).value.trim();
         return {
           title: get('f-title'),
-          url: get('f-url'),
+          url: (function(){
+            const sel = document.getElementById('creation-select');
+            const chosen = sel && sel.value ? sel.value : get('f-url');
+            return chosen;
+          })(),
           description: get('f-description'),
           iconUrl: get('f-icon'),
           themeColor: document.getElementById('f-color').value || '#FE5000'
@@ -567,15 +571,28 @@
             const shouldAutoSelect = !currentSrc || currentSrc === 'about:blank' || currentSrc.endsWith('/ball/index.html');
             if (shouldAutoSelect && sel.options.length > 1) {
               sel.selectedIndex = 1;
-              frame.src = sel.options[1].value;
+              const href = sel.options[1].value;
+              frame.src = href;
+              // Sync QR form URL and title to match iframe selection
+              const titleEl = document.getElementById('f-title');
+              const urlEl = document.getElementById('f-url');
+              if (titleEl) titleEl.value = sel.options[1].textContent || '';
+              if (urlEl) urlEl.value = href;
+              try { await generateJsonQr(); } catch (_) {}
             }
           }
-          sel.addEventListener('change', () => {
+          sel.addEventListener('change', async () => {
             if (!sel.value) return;
             const frame = document.querySelector('.viewport iframe');
             if (frame) {
               frame.src = sel.value; // absolute URL
             }
+            // Update QR form to match selected creation
+            const titleEl = document.getElementById('f-title');
+            const urlEl = document.getElementById('f-url');
+            if (titleEl) titleEl.value = sel.selectedOptions[0]?.textContent || '';
+            if (urlEl) urlEl.value = sel.value;
+            try { await generateJsonQr(); } catch (_) {}
           });
         } catch (e) {
           const sel = document.getElementById('creation-select');
