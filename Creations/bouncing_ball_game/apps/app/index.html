@@ -10,6 +10,24 @@
     <div id="app">
         <div id="gameContainer">
             <div id="score">Score: 0</div>
+            <button id="settingsButton" aria-label="Settings" title="Settings">⚙️</button>
+            <div id="settingsMenu" class="hidden" role="dialog" aria-modal="false" aria-labelledby="settingsTitle">
+                <div class="settings-header">
+                    <span id="settingsTitle">Settings</span>
+                </div>
+                <div class="settings-item">
+                    <label>
+                        <input type="checkbox" id="musicMuteToggle">
+                        <span>Mute Music</span>
+                    </label>
+                </div>
+                <div class="settings-item">
+                    <label>
+                        <input type="checkbox" id="sfxMuteToggle">
+                        <span>Mute SFX</span>
+                    </label>
+                </div>
+            </div>
             <canvas id="gameCanvas" width="240" height="282"></canvas>
             <div id="gameOver" class="hidden">
                 <h2>Game Over!</h2>

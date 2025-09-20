@@ -16,7 +16,9 @@ let gameState = {
   highestY: 0,
   screenScrollY: 0,
   platformSpeed: 1,
-  gameStarted: false
+  gameStarted: false,
+  musicMuted: false,
+  sfxMuted: false
 };
 
 // Game objects
@@ -33,6 +35,8 @@ let ball = {
 let platforms = [];
 let canvas, ctx;
 let startingPlatform = null;
+let backgroundMusic = null;
+let hasTriedStartMusic = false;
 
 // Game constants
 const GRAVITY = 0.1;
@@ -94,7 +98,7 @@ function initializePlatforms() {
 
 // Physics update
 function updatePhysics() {
-  if (!gameState.isPlaying) return;
+  if (!gameState.isPlaying || gameState.isPaused) return;
 
   // Apply gravity
   ball.velocityY += GRAVITY;
@@ -162,6 +166,7 @@ function updatePhysics() {
 
 // Collision detection
 function checkCollisions() {
+  if (!gameState.isPlaying || gameState.isPaused) return;
   ball.onGround = false;
   
   platforms.forEach(platform => {
@@ -293,6 +298,8 @@ window.addEventListener('sideClick', () => {
   if (!gameState.isPlaying) {
     startGame();
   }
+  // Attempt to start music on a user gesture
+  tryStartBackgroundMusic();
 });
 
 // Keyboard fallback for development
@@ -304,6 +311,7 @@ document.addEventListener('keydown', (event) => {
         if (!gameState.isPlaying) {
           startGame();
         }
+        tryStartBackgroundMusic();
         break;
       case 'ArrowLeft':
         if (gameState.isPlaying) {
@@ -329,6 +337,72 @@ document.addEventListener('DOMContentLoaded', () => {
   // Set canvas size to match R1 screen
   canvas.width = SCREEN_WIDTH;
   canvas.height = SCREEN_HEIGHT;
+
+  // Setup settings UI
+  const settingsButton = document.getElementById('settingsButton');
+  const settingsMenu = document.getElementById('settingsMenu');
+  const musicToggle = document.getElementById('musicMuteToggle');
+  const sfxToggle = document.getElementById('sfxMuteToggle');
+
+  if (settingsButton && settingsMenu) {
+    settingsButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      settingsMenu.classList.toggle('hidden');
+      const isOpen = !settingsMenu.classList.contains('hidden');
+      if (isOpen) {
+        // Pause only if currently playing
+        if (gameState.isPlaying) {
+          gameState.isPaused = true;
+        }
+      } else {
+        // Resume if it was paused by the menu
+        if (gameState.isPaused) {
+          gameState.isPaused = false;
+        }
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!settingsMenu.classList.contains('hidden')) {
+        // Close if clicking outside the menu
+        if (!settingsMenu.contains(e.target) && e.target !== settingsButton) {
+          settingsMenu.classList.add('hidden');
+          if (gameState.isPaused) {
+            gameState.isPaused = false;
+          }
+        }
+      }
+    });
+  }
+
+  // Load persisted audio prefs
+  try {
+    const savedMusicMuted = localStorage.getItem('bbg_musicMuted');
+    const savedSfxMuted = localStorage.getItem('bbg_sfxMuted');
+    if (savedMusicMuted !== null) gameState.musicMuted = savedMusicMuted === 'true';
+    if (savedSfxMuted !== null) gameState.sfxMuted = savedSfxMuted === 'true';
+  } catch (err) {
+    // ignore storage errors
+  }
+
+  if (musicToggle) {
+    musicToggle.checked = gameState.musicMuted;
+    musicToggle.addEventListener('change', () => {
+      gameState.musicMuted = musicToggle.checked;
+      persistAudioPrefs();
+      updateMusicState();
+    });
+  }
+
+  if (sfxToggle) {
+    sfxToggle.checked = gameState.sfxMuted;
+    sfxToggle.addEventListener('change', () => {
+      gameState.sfxMuted = sfxToggle.checked;
+      persistAudioPrefs();
+    });
+  }
+
+  // Prepare background music element
+  initBackgroundMusic();
   
   // Add keyboard fallback for development (Space = side button)
   if (typeof PluginMessageHandler === 'undefined') {
@@ -338,13 +412,70 @@ document.addEventListener('DOMContentLoaded', () => {
         window.dispatchEvent(new CustomEvent('sideClick'));
       }
     });
+    // Also try to start music on generic user interactions in browser
+    ['pointerdown', 'touchstart', 'click'].forEach((evt) => {
+      window.addEventListener(evt, tryStartBackgroundMusic, { once: true });
+    });
   }
   
   // Start the game automatically
   startGame();
+  // Try to start music (may be blocked until gesture)
+  tryStartBackgroundMusic();
 });
 
 console.log('Bouncing Ball Game Ready!');
 console.log('Controls:');
 console.log('- Scroll wheel: Move ball left/right');
 console.log('- Side button: Restart game');
+
+// ----------------------
+// Audio helpers
+// ----------------------
+function initBackgroundMusic() {
+  if (backgroundMusic) return;
+  try {
+    const musicUrl = new URL('./banger1.mp3', import.meta.url).href;
+    backgroundMusic = new Audio(musicUrl);
+    backgroundMusic.loop = true;
+    backgroundMusic.volume = 0.4;
+    backgroundMusic.muted = !!gameState.musicMuted;
+  } catch (e) {
+    console.warn('Failed to initialize background music', e);
+  }
+}
+
+function tryStartBackgroundMusic() {
+  if (!backgroundMusic) initBackgroundMusic();
+  if (!backgroundMusic || hasTriedStartMusic) return;
+  hasTriedStartMusic = true;
+  if (gameState.musicMuted) return;
+  const playPromise = backgroundMusic.play();
+  if (playPromise && typeof playPromise.then === 'function') {
+    playPromise.catch(() => {
+      // Autoplay blocked; allow another try on next gesture
+      hasTriedStartMusic = false;
+    });
+  }
+}
+
+function updateMusicState() {
+  if (!backgroundMusic) return;
+  backgroundMusic.muted = !!gameState.musicMuted;
+  if (gameState.musicMuted) {
+    backgroundMusic.pause();
+  } else {
+    // Attempt to play if unmuted
+    hasTriedStartMusic = false;
+    tryStartBackgroundMusic();
+  }
+}
+
+function persistAudioPrefs() {
+  try {
+    localStorage.setItem('bbg_musicMuted', String(!!gameState.musicMuted));
+    localStorage.setItem('bbg_sfxMuted', String(!!gameState.sfxMuted));
+  } catch (err) {
+    // ignore
+  }
+}
