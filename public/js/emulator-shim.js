@@ -189,9 +189,21 @@
       }
     }, { passive: false });
 
+    // Utility: detect if event target is an editable control
+    function isEditableTarget(e) {
+      const t = e.target;
+      if (!t) return false;
+      try {
+        if (typeof t.closest === 'function' && t.closest('input, textarea, select, [contenteditable="true"]')) return true;
+      } catch (_) {}
+      const tag = (t.tagName || '').toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || (t.isContentEditable === true);
+    }
+
     // Keyboard mappings (window-level)
     window.addEventListener('keydown', (e) => {
       if (!targetWin) return;
+      if (isEditableTarget(e)) return; // do not intercept typing in inputs/textarea
       // Prevent page interactions for our keys
       const prevent = () => { e.preventDefault(); e.stopPropagation(); };
       switch (e.code) {
@@ -219,6 +231,7 @@
     }, { capture: true });
 
     window.addEventListener('keyup', (e) => {
+      if (isEditableTarget(e)) return; // allow typing spaces in inputs
       if (e.code !== 'Space') return;
       e.preventDefault(); e.stopPropagation();
       const hadTimer = !!lpTimer;
