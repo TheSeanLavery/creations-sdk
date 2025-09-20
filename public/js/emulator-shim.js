@@ -173,12 +173,20 @@
     if (btnUp) btnUp.addEventListener('click', () => handleScroll('up'));
     if (btnDown) btnDown.addEventListener('click', () => handleScroll('down'));
 
-    // Wheel mapping on viewport
+    // Wheel mapping on viewport with step threshold
+    let vpWheelSteps = 0;
+    let vpLastDir = null;
+    const vpTriggerSteps = 3; // require 3 wheel events before triggering
     viewport?.addEventListener('wheel', (e) => {
       if (!targetWin) return;
       e.preventDefault(); e.stopPropagation();
       const dir = (e.deltaY || 0) > 0 ? 'down' : 'up';
-      handleScroll(dir);
+      if (dir !== vpLastDir) { vpLastDir = dir; vpWheelSteps = 0; }
+      vpWheelSteps += 1;
+      if (vpWheelSteps >= vpTriggerSteps) {
+        vpWheelSteps = 0;
+        handleScroll(dir);
+      }
     }, { passive: false });
 
     // Keyboard mappings (window-level)

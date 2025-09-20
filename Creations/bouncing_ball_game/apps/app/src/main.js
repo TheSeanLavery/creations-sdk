@@ -37,14 +37,18 @@ let startingPlatform = null;
 // Game constants
 const GRAVITY = 0.1;
 const BOUNCE_IMPULSE = 6.5; // fixed upward velocity on bounce
-const HORIZONTAL_SPEED = 3;
+// Horizontal motion parameters (velocity-based control)
+const HORIZONTAL_ACCEL = 0.8;           // amount added to velocity per scroll/press
+const MAX_HORIZONTAL_SPEED = 6;         // cap absolute horizontal speed
+const GROUND_FRICTION = 0.85;           // stronger friction when ball is grounded
+const AIR_DRAG = 0.98;                  // gentle drag while airborne
 const PLATFORM_WIDTH = 60;
 const PLATFORM_HEIGHT = 8;
 const GROUND_Y = 260;
 const SCREEN_WIDTH = 240;
 const SCREEN_HEIGHT = 254;
 const SCROLL_THRESHOLD = 100; // screenspace Y threshold
-const SCROLL_SPEED_MULTIPLIER = -0.2; // scales how fast the camera moves up
+const SCROLL_SPEED_MULTIPLIER = -0.1; // scales how fast the camera moves up
 
 // Platform generation
 function generatePlatform(y) {
@@ -108,8 +112,9 @@ function updatePhysics() {
     ball.velocityX = 0;
   }
   
-  // Friction - slow down horizontal movement
-  ball.velocityX *= 0.98;
+  // Friction/drag - slow horizontal velocity depending on last frame's grounded state
+  ball.velocityX *= (ball.onGround ? GROUND_FRICTION : AIR_DRAG);
+  if (Math.abs(ball.velocityX) < 0.01) ball.velocityX = 0;
   
   // Check if ball moved upward from ground
   if (ball.y < GROUND_Y - 50 && !gameState.gameStarted) {
@@ -273,13 +278,13 @@ function gameOver() {
 // Handle R1 scroll wheel events for horizontal movement
 window.addEventListener('scrollUp', () => {
   if (gameState.isPlaying) {
-    ball.velocityX = Math.max(ball.velocityX - HORIZONTAL_SPEED, -HORIZONTAL_SPEED * 2);
+    ball.velocityX = Math.max(ball.velocityX - HORIZONTAL_ACCEL, -MAX_HORIZONTAL_SPEED);
   }
 });
 
 window.addEventListener('scrollDown', () => {
   if (gameState.isPlaying) {
-    ball.velocityX = Math.min(ball.velocityX + HORIZONTAL_SPEED, HORIZONTAL_SPEED * 2);
+    ball.velocityX = Math.min(ball.velocityX + HORIZONTAL_ACCEL, MAX_HORIZONTAL_SPEED);
   }
 });
 
@@ -302,12 +307,12 @@ document.addEventListener('keydown', (event) => {
         break;
       case 'ArrowLeft':
         if (gameState.isPlaying) {
-          ball.velocityX = Math.max(ball.velocityX - HORIZONTAL_SPEED, -HORIZONTAL_SPEED * 2);
+          ball.velocityX = Math.max(ball.velocityX - HORIZONTAL_ACCEL, -MAX_HORIZONTAL_SPEED);
         }
         break;
       case 'ArrowRight':
         if (gameState.isPlaying) {
-          ball.velocityX = Math.min(ball.velocityX + HORIZONTAL_SPEED, HORIZONTAL_SPEED * 2);
+          ball.velocityX = Math.min(ball.velocityX + HORIZONTAL_ACCEL, MAX_HORIZONTAL_SPEED);
         }
         break;
     }

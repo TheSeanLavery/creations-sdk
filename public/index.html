@@ -682,19 +682,26 @@
         (function bindInputPanel(){
           const panel = document.getElementById('input-panel');
           if (!panel) return;
+          // Wheel with threshold to avoid firing on tiny scrolls
+          let panelWheelSteps = 0;
+          let panelLastDir = null;
+          const panelTriggerSteps = 3;
           panel.addEventListener('wheel', (e) => {
             e.preventDefault();
             e.stopPropagation();
             const dir = (e.deltaY || 0) > 0 ? 'down' : 'up';
-            // Dispatch to iframe via emulator shim’s global handler
-            try {
-              const frameWin = document.querySelector('.viewport iframe')?.contentWindow;
-              if (frameWin) {
-                // Smooth scroll and custom event to match device behavior
-                frameWin.scrollBy({ top: dir === 'down' ? 80 : -80, behavior: 'smooth' });
-                frameWin.dispatchEvent(new CustomEvent(dir === 'down' ? 'scrollDown' : 'scrollUp', { detail: { source: 'panel' } }));
-              }
-            } catch (_) {}
+            if (dir !== panelLastDir) { panelLastDir = dir; panelWheelSteps = 0; }
+            panelWheelSteps += 1;
+            if (panelWheelSteps >= panelTriggerSteps) {
+              panelWheelSteps = 0;
+              try {
+                const frameWin = document.querySelector('.viewport iframe')?.contentWindow;
+                if (frameWin) {
+                  frameWin.scrollBy({ top: dir === 'down' ? 80 : -80, behavior: 'smooth' });
+                  frameWin.dispatchEvent(new CustomEvent(dir === 'down' ? 'scrollDown' : 'scrollUp', { detail: { source: 'panel' } }));
+                }
+              } catch (_) {}
+            }
           }, { passive: false });
 
           // Click maps to side button
