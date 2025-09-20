@@ -7,6 +7,10 @@
     {
       "label": "plugin-demo",
       "url": "/creations/plugin-demo/index.html"
+    },
+    {
+      "label": "template",
+      "url": "/creations/template/index.html"
     }
   ]
 }
