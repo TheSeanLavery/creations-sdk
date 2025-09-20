@@ -86,6 +86,30 @@ button:active, .touchable:active {
     font-weight: bold;
 }
 
+#highScore {
+    position: absolute;
+    top: 2vw;
+    left: 32vw;
+    font-size: 4vw;
+    color: #aaa;
+    z-index: 10;
+    font-weight: bold;
+}
+
+#newHighScoreBanner {
+    position: absolute;
+    top: 8vw;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2vw 3vw;
+    border: 2px solid #FFD700;
+    border-radius: 2vw;
+    color: #000;
+    background: #FFD700;
+    font-weight: 800;
+    z-index: 25;
+}
+
 #settingsButton {
     all: unset;
     position: absolute;
@@ -168,6 +192,15 @@ button:active, .touchable:active {
 
 .hidden {
     display: none !important;
+}
+
+@keyframes goldFlash {
+    0%, 100% { color: #FFD700; }
+    50% { color: #ffffff; }
+}
+
+.flash-gold {
+    animation: goldFlash 0.5s ease-in-out 8; /* 0.5s * 8 = 4s */
 }
 
 /* IMPORTANT: Canvas sizing for R1 device */

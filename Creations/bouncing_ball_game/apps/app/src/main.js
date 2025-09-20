@@ -18,7 +18,9 @@ let gameState = {
   platformSpeed: 1,
   gameStarted: false,
   musicMuted: false,
-  sfxMuted: false
+  sfxMuted: false,
+  highScore: 0,
+  isNewHighScore: false
 };
 
 // Game objects
@@ -37,6 +39,8 @@ let canvas, ctx;
 let startingPlatform = null;
 let backgroundMusic = null;
 let hasTriedStartMusic = false;
+let ballImage = null;
+let ballImageLoaded = false;
 
 // Game constants
 const GRAVITY = 0.1;
@@ -210,16 +214,26 @@ function render() {
   });
   
   // Draw ball
-  ctx.fillStyle = ball.color;
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-  ctx.fill();
+  const diameter = ball.radius * 2;
+  if (ballImageLoaded && ballImage) {
+    const drawX = Math.round(ball.x - ball.radius);
+    const drawY = Math.round(ball.y - ball.radius);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(ballImage, drawX, drawY, diameter, diameter);
+  } else {
+    ctx.fillStyle = ball.color;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
   
   // Restore context
   ctx.restore();
   
   // Update score display
   document.getElementById('score').textContent = `Score: ${gameState.score}`;
+  const hs = document.getElementById('highScore');
+  if (hs) hs.textContent = `Top: ${gameState.highScore}`;
 }
 
 // Game loop
@@ -241,6 +255,10 @@ function startGame() {
   gameState.screenScrollY = 0;
   gameState.platformSpeed = 1;
   gameState.gameStarted = false;
+  gameState.isNewHighScore = false;
+  // Hide banner if visible
+  const banner = document.getElementById('newHighScoreBanner');
+  if (banner) banner.classList.add('hidden');
   
   // Initialize platforms first
   initializePlatforms();
@@ -272,6 +290,34 @@ function gameOver() {
   // Show game over screen
   document.getElementById('finalScore').textContent = gameState.score;
   document.getElementById('gameOver').classList.remove('hidden');
+  
+  // Check and persist high score
+  const previousHigh = gameState.highScore;
+  if (gameState.score > previousHigh) {
+    gameState.highScore = gameState.score;
+    gameState.isNewHighScore = true;
+    try {
+      localStorage.setItem('bbg_highScore', String(gameState.highScore));
+    } catch (e) {}
+  }
+  
+  // Update high score UI
+  const hs = document.getElementById('highScore');
+  if (hs) hs.textContent = `Top: ${gameState.highScore}`;
+  
+  // Flash gold/white for 4 seconds if new high score
+  if (gameState.isNewHighScore) {
+    const finalScoreEl = document.getElementById('finalScore');
+    if (finalScoreEl) finalScoreEl.classList.add('flash-gold');
+    if (hs) hs.classList.add('flash-gold');
+    const banner = document.getElementById('newHighScoreBanner');
+    if (banner) banner.classList.remove('hidden');
+    setTimeout(() => {
+      if (finalScoreEl) finalScoreEl.classList.remove('flash-gold');
+      if (hs) hs.classList.remove('flash-gold');
+      if (banner) banner.classList.add('hidden');
+    }, 4000);
+  }
   
   // Visual feedback - flash screen
   canvas.style.filter = 'brightness(1.5)';
@@ -338,6 +384,18 @@ document.addEventListener('DOMContentLoaded', () => {
   canvas.width = SCREEN_WIDTH;
   canvas.height = SCREEN_HEIGHT;
 
+  // Load ball sprite image
+  try {
+    const spriteUrl = new URL('./bun.png', import.meta.url).href;
+    ballImage = new Image();
+    ballImage.src = spriteUrl;
+    ballImage.onload = () => {
+      ballImageLoaded = true;
+    };
+  } catch (e) {
+    console.warn('Failed to load ball sprite', e);
+  }
+
   // Setup settings UI
   const settingsButton = document.getElementById('settingsButton');
   const settingsMenu = document.getElementById('settingsMenu');
@@ -380,6 +438,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedSfxMuted = localStorage.getItem('bbg_sfxMuted');
     if (savedMusicMuted !== null) gameState.musicMuted = savedMusicMuted === 'true';
     if (savedSfxMuted !== null) gameState.sfxMuted = savedSfxMuted === 'true';
+    const savedHighScore = localStorage.getItem('bbg_highScore');
+    if (savedHighScore !== null) gameState.highScore = parseInt(savedHighScore, 10) || 0;
   } catch (err) {
     // ignore storage errors
   }
