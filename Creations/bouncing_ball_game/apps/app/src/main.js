@@ -41,6 +41,9 @@ let backgroundMusic = null;
 let hasTriedStartMusic = false;
 let ballImage = null;
 let ballImageLoaded = false;
+let previousBallX = 0;
+let previousBallY = 0;
+let previousScreenScrollY = 0;
 
 // Game constants
 const GRAVITY = 0.1;
@@ -58,11 +61,57 @@ const SCREEN_HEIGHT = 254;
 const SCROLL_THRESHOLD = 100; // screenspace Y threshold
 const SCROLL_SPEED_MULTIPLIER = -0.1; // scales how fast the camera moves up
 
+// Fixed timestep loop (60 Hz physics)
+const FIXED_TIMESTEP_MS = 1000 / 60;
+let accumulatorMs = 0;
+let lastTimestamp = 0;
+let loopActive = false;
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function startMainLoop() {
+  if (loopActive) return;
+  loopActive = true;
+  lastTimestamp = performance.now();
+  accumulatorMs = 0;
+  setTimeout(runMainLoop, 0);
+}
+
+function stopMainLoop() {
+  loopActive = false;
+}
+
+function runMainLoop() {
+  if (!loopActive) return;
+  const now = performance.now();
+  let frameTime = now - lastTimestamp;
+  if (frameTime > 100) frameTime = 100; // clamp to avoid spiral of death
+  lastTimestamp = now;
+  accumulatorMs += frameTime;
+
+  while (accumulatorMs >= FIXED_TIMESTEP_MS) {
+    updatePhysics();
+    checkCollisions();
+    accumulatorMs -= FIXED_TIMESTEP_MS;
+  }
+
+  render();
+
+  if (gameState.isPlaying) {
+    setTimeout(runMainLoop, 0); // decoupled from vsync
+  } else {
+    loopActive = false;
+  }
+}
+
 // Platform generation
 function generatePlatform(y) {
   return {
     x: Math.random() * (SCREEN_WIDTH - PLATFORM_WIDTH),
     y: y,
+    prevY: y,
     width: PLATFORM_WIDTH,
     height: PLATFORM_HEIGHT,
     color: '#fff'
@@ -76,6 +125,7 @@ function initializePlatforms() {
   platforms.push({
     x: 0,
     y: GROUND_Y,
+    prevY: GROUND_Y,
     width: SCREEN_WIDTH,
     height: PLATFORM_HEIGHT,
     color: '#fff',
@@ -87,6 +137,7 @@ function initializePlatforms() {
   startingPlatform = {
     x: Math.floor((SCREEN_WIDTH - PLATFORM_WIDTH) / 2),
     y: startY,
+    prevY: startY,
     width: PLATFORM_WIDTH,
     height: PLATFORM_HEIGHT,
     color: '#fff',
@@ -108,6 +159,8 @@ function updatePhysics() {
   ball.velocityY += GRAVITY;
   
   // Update ball position
+  previousBallX = ball.x;
+  previousBallY = ball.y;
   ball.x += ball.velocityX;
   ball.y += ball.velocityY;
   
@@ -134,6 +187,7 @@ function updatePhysics() {
     const ballScreenY = ball.y - gameState.screenScrollY;
     if (ballScreenY < SCROLL_THRESHOLD) {
       const overshoot = SCROLL_THRESHOLD - ballScreenY;
+      previousScreenScrollY = gameState.screenScrollY;
       gameState.screenScrollY += overshoot * SCROLL_SPEED_MULTIPLIER;
     }
   }
@@ -150,6 +204,7 @@ function updatePhysics() {
   
   // Move platforms down
   platforms.forEach(platform => {
+    platform.prevY = platform.y;
     platform.y += gameState.platformSpeed;
   });
   
@@ -205,25 +260,31 @@ function render() {
   
   // Save context for scrolling
   ctx.save();
-  ctx.translate(0, -gameState.screenScrollY);
+  // Interpolate scroll for smoother visuals
+  const alpha = Math.min(1, accumulatorMs / FIXED_TIMESTEP_MS);
+  const interpolatedScrollY = lerp(previousScreenScrollY, gameState.screenScrollY, alpha || 0);
+  ctx.translate(0, -interpolatedScrollY);
   
   // Draw platforms
   platforms.forEach(platform => {
+    const interpY = lerp(platform.prevY, platform.y, alpha || 0);
     ctx.fillStyle = platform.color;
-    ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+    ctx.fillRect(platform.x, interpY, platform.width, platform.height);
   });
   
   // Draw ball
   const diameter = ball.radius * 2;
+  const drawBallX = lerp(previousBallX, ball.x, alpha || 0);
+  const drawBallY = lerp(previousBallY, ball.y, alpha || 0);
   if (ballImageLoaded && ballImage) {
-    const drawX = Math.round(ball.x - ball.radius);
-    const drawY = Math.round(ball.y - ball.radius);
+    const drawX = Math.round(drawBallX - ball.radius);
+    const drawY = Math.round(drawBallY - ball.radius);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(ballImage, drawX, drawY, diameter, diameter);
   } else {
     ctx.fillStyle = ball.color;
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.arc(drawBallX, drawBallY, ball.radius, 0, Math.PI * 2);
     ctx.fill();
   }
   
@@ -237,15 +298,7 @@ function render() {
 }
 
 // Game loop
-function gameLoop() {
-  updatePhysics();
-  checkCollisions();
-  render();
-  
-  if (gameState.isPlaying) {
-    requestAnimationFrame(gameLoop);
-  }
-}
+// gameLoop replaced by startMainLoop/runMainLoop
 
 // Start game
 function startGame() {
@@ -280,7 +333,7 @@ function startGame() {
   document.getElementById('gameOver').classList.add('hidden');
   
   // Start game loop
-  gameLoop();
+  startMainLoop();
 }
 
 // Game over
@@ -416,6 +469,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Resume if it was paused by the menu
         if (gameState.isPaused) {
           gameState.isPaused = false;
+          // Reset loop timestamp to avoid large catch-up
+          lastTimestamp = performance.now();
         }
       }
     });
@@ -426,6 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
           settingsMenu.classList.add('hidden');
           if (gameState.isPaused) {
             gameState.isPaused = false;
+            lastTimestamp = performance.now();
           }
         }
       }
