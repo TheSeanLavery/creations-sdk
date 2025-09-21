@@ -167,6 +167,15 @@ function te(e) {
         (document.getElementById("two-player-header").style.display = "flex"),
         ne()),
     I());
+  // Re-apply layout adjustments when switching modes
+  if (typeof window !== "undefined") {
+    const header = document.querySelector(".compact-header");
+    const gc = document.querySelector(".game-controls");
+    const headerH = header ? header.offsetHeight : 0;
+    if (gc) {
+      gc.style.top = (headerH + 6) + "px";
+    }
+  }
 }
 function ne() {
   ((p = 0), (f = 0), (g = 1), (j = ""), (q = !1), O());
@@ -369,6 +378,11 @@ const Se = () => {
         (document.querySelector(".hint-text b").innerText = t));
     }
     Se();
+    // Recompute scaling after new word set
+    setTimeout(() => {
+      const evt = new Event("resize");
+      window.dispatchEvent(evt);
+    }, 0);
   },
   Le = () => {
     R ||
@@ -470,9 +484,24 @@ function Ce() {
       gc.style.top = (headerH + 6) + "px";
     }
     const kb = document.querySelector(".keyboard");
-    const sbH = sb ? sb.offsetHeight : 0;
+    // submit button is snapped to bottom; no extra keyboard margin needed
     if (kb) {
-      kb.style.marginBottom = (sbH + 12) + "px";
+      kb.style.marginBottom = "0px";
+    }
+    // Scale word letters down to keep on one line
+    if (z) {
+      const container = z.parentElement; // ul wrapped by container
+      if (container) {
+        let scale = 1;
+        z.style.transformOrigin = "center center";
+        z.style.transform = "scale(1)";
+        const maxWidth = container.clientWidth - 12;
+        const naturalWidth = z.scrollWidth;
+        if (naturalWidth > maxWidth && naturalWidth > 0) {
+          scale = Math.max(0.5, maxWidth / naturalWidth);
+          z.style.transform = `scale(${scale})`;
+        }
+      }
     }
   };
   adjustLayout();
