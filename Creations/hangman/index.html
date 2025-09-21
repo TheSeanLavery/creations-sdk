@@ -9,8 +9,10 @@
   <script type="module" crossorigin="" src="./R1 Hangman Game_files/main-gmhqTCYh.js"></script>
   <link rel="stylesheet" crossorigin="" href="./R1 Hangman Game_files/main-DGlAMJSK.css">
   <style>
-    .submit-container { display: flex; justify-content: center; margin-top: 12px; }
+    .submit-container { position: fixed; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; z-index: 900; }
     #submit-letter-btn { padding: 12px 24px; font-size: 18px; width: 80%; max-width: 320px; border-radius: 10px; }
+    .game-controls { position: fixed; top: 6px; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: center; z-index: 950; pointer-events: auto; }
+    .game-controls .guesses-text { margin-left: 12px; }
     #hint-overlay { display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
     #hint-box { background: #fff; color: #333; padding: 16px 20px; border-radius: 12px; max-width: 85%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
     #hint-box strong { display: block; margin-bottom: 6px; font-size: 16px; }

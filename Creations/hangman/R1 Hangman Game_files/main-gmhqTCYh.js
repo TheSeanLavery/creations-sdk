@@ -461,6 +461,23 @@ function Ce() {
   sb = document.getElementById("submit-letter-btn");
 
   (ae(), xe(), qe(), ye(), be(), w[0].classList.add("selected"), (l = 0));
+
+  const adjustLayout = () => {
+    const header = document.querySelector(".compact-header");
+    const gc = document.querySelector(".game-controls");
+    const headerH = header ? header.offsetHeight : 0;
+    if (gc) {
+      gc.style.top = (headerH + 6) + "px";
+    }
+    const kb = document.querySelector(".keyboard");
+    const sbH = sb ? sb.offsetHeight : 0;
+    if (kb) {
+      kb.style.marginBottom = (sbH + 12) + "px";
+    }
+  };
+  adjustLayout();
+  window.addEventListener("resize", adjustLayout);
+  window.addEventListener("orientationchange", adjustLayout);
   if (sb) {
     sb.disabled = !0;
     sb.addEventListener("click", () => {
