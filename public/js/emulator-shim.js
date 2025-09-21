@@ -176,7 +176,7 @@
     // Wheel mapping on viewport with step threshold
     let vpWheelSteps = 0;
     let vpLastDir = null;
-    const vpTriggerSteps = 3; // require 3 wheel events before triggering
+    const vpTriggerSteps = 20; // require more wheel events before triggering (less sensitive)
     viewport?.addEventListener('wheel', (e) => {
       if (!targetWin) return;
       e.preventDefault(); e.stopPropagation();

@@ -49,7 +49,7 @@ let previousScreenScrollY = 0;
 const GRAVITY = 0.1;
 const BOUNCE_IMPULSE = 6.5; // fixed upward velocity on bounce
 // Horizontal motion parameters (velocity-based control)
-const HORIZONTAL_ACCEL = 0.8;           // amount added to velocity per scroll/press
+const HORIZONTAL_ACCEL = 1.2;           // amount added to velocity per scroll/press
 const MAX_HORIZONTAL_SPEED = 6;         // cap absolute horizontal speed
 const GROUND_FRICTION = 0.85;           // stronger friction when ball is grounded
 const AIR_DRAG = 0.98;                  // gentle drag while airborne
