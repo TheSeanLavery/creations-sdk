@@ -5,16 +5,20 @@
       "url": "/creations/bouncing_ball_game/index.html"
     },
     {
+      "label": "hangman",
+      "url": "/creations/hangman/index.html"
+    },
+    {
       "label": "plugin-demo",
       "url": "/creations/plugin-demo/index.html"
     },
     {
-      "label": "steal",
-      "url": "/creations/steal/index.html"
-    },
-    {
       "label": "template",
       "url": "/creations/template/index.html"
+    },
+    {
+      "label": "webglDemo",
+      "url": "/creations/webglDemo/index.html"
     }
   ]
 }
