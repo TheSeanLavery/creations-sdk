@@ -337,6 +337,7 @@ function startGame() {
   gameState.platformSpeed = 1;
   gameState.gameStarted = false;
   gameState.isNewHighScore = false;
+  gameState.isPaused = false;
   // Hide banner if visible
   const banner = document.getElementById('newHighScoreBanner');
   if (banner) banner.classList.add('hidden');
@@ -359,6 +360,11 @@ function startGame() {
   
   // Hide game over screen
   document.getElementById('gameOver').classList.add('hidden');
+  // Hide pause/settings menu if open
+  const settingsMenu = document.getElementById('settingsMenu');
+  if (settingsMenu && !settingsMenu.classList.contains('hidden')) {
+    settingsMenu.classList.add('hidden');
+  }
   
   // Start game loop
   startMainLoop();
