@@ -60,6 +60,8 @@ const SCREEN_WIDTH = 240;
 const SCREEN_HEIGHT = 254;
 const SCROLL_THRESHOLD = 100; // screenspace Y threshold
 const SCROLL_SPEED_MULTIPLIER = -0.1; // scales how fast the camera moves up
+const MAX_PLATFORMS = 32; // fixed pool size
+const PLATFORM_SPACING_Y = 80; // vertical spacing between platforms
 
 // Fixed timestep loop (60 Hz physics)
 const FIXED_TIMESTEP_MS = 1000 / 60;
@@ -120,9 +122,10 @@ function generatePlatform(y) {
 
 // Initialize platforms
 function initializePlatforms() {
-  platforms = [];
-  // Create ground platform
-  platforms.push({
+  // Fixed-size pool
+  platforms = new Array(MAX_PLATFORMS);
+  // Ground platform (index 0)
+  platforms[0] = {
     x: 0,
     y: GROUND_Y,
     prevY: GROUND_Y,
@@ -130,9 +133,9 @@ function initializePlatforms() {
     height: PLATFORM_HEIGHT,
     color: '#fff',
     isGround: true
-  });
-  
-  // Create starting platform higher than ground
+  };
+
+  // Starting platform higher than ground (index 1)
   const startY = GROUND_Y - 60;
   startingPlatform = {
     x: Math.floor((SCREEN_WIDTH - PLATFORM_WIDTH) / 2),
@@ -143,11 +146,11 @@ function initializePlatforms() {
     color: '#fff',
     isStart: true
   };
-  platforms.push(startingPlatform);
-  
-  // Generate platforms going upward from the starting platform
-  for (let i = 1; i <= 20; i++) {
-    platforms.push(generatePlatform(startY - (i * 80)));
+  platforms[1] = startingPlatform;
+
+  // Fill the rest upward from the start using fixed spacing
+  for (let i = 2; i < MAX_PLATFORMS; i++) {
+    platforms[i] = generatePlatform(startY - ((i - 1) * PLATFORM_SPACING_Y));
   }
 }
 
@@ -208,19 +211,38 @@ function updatePhysics() {
   // Increase platform speed over time
   gameState.platformSpeed = .2 + (gameState.score * 0.01);
   
-  // Move platforms down
-  platforms.forEach(platform => {
+  // Move platforms down and recycle those that are far below
+  let highestYFound = Infinity;
+  for (let i = 0; i < platforms.length; i++) {
+    const platform = platforms[i];
     platform.prevY = platform.y;
     platform.y += gameState.platformSpeed;
-  });
-  
-  // Remove platforms that are too far down and add new ones at the top
-  platforms = platforms.filter(platform => platform.y < gameState.screenScrollY + SCREEN_HEIGHT + 100);
-  
-  // Add new platforms at the top
-  while (platforms.length < 25) {
-    const highestPlatform = Math.min(...platforms.map(p => p.y));
-    platforms.push(generatePlatform(highestPlatform - 80));
+    if (!platform.isGround) {
+      if (platform.y < highestYFound) highestYFound = platform.y;
+    }
+  }
+
+  // Determine threshold for recycling
+  const recycleThreshold = gameState.screenScrollY + SCREEN_HEIGHT + 100;
+  // If no non-ground platforms, set a sane top
+  if (highestYFound === Infinity) highestYFound = GROUND_Y - PLATFORM_SPACING_Y;
+
+  for (let i = 0; i < platforms.length; i++) {
+    const platform = platforms[i];
+    if (platform.isGround) continue;
+    if (platform.y >= recycleThreshold) {
+      // Recycle to the top row above current highest
+      const newY = highestYFound - PLATFORM_SPACING_Y;
+      highestYFound = newY;
+      platform.x = Math.random() * (SCREEN_WIDTH - PLATFORM_WIDTH);
+      platform.y = newY;
+      platform.prevY = newY;
+      platform.width = PLATFORM_WIDTH;
+      platform.height = PLATFORM_HEIGHT;
+      platform.color = '#fff';
+      // clear flags
+      platform.isStart = false;
+    }
   }
   
   // Game over check - ball falls below screen
