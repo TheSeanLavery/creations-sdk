@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<!-- saved from url=(0085)https://systematic-crimson-worm.intern.carrotpie.engineering/apps/app/dist/index.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=240, height=282, initial-scale=1.0, user-scalable=no">
+    <title>R1 Hangman Game</title>
+  <script src="./R1 Hangman Game_files/conts.js"></script>
+  <script>if (!globalThis.k && typeof k !== 'undefined') { globalThis.k = k; }</script>
+  <script type="module" crossorigin="" src="./R1 Hangman Game_files/main-gmhqTCYh.js"></script>
+  <link rel="stylesheet" crossorigin="" href="./R1 Hangman Game_files/main-DGlAMJSK.css">
+  <style>
+    .submit-container { display: flex; justify-content: center; margin-top: 12px; }
+    #submit-letter-btn { padding: 12px 24px; font-size: 18px; width: 80%; max-width: 320px; border-radius: 10px; }
+    #hint-overlay { display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    #hint-box { background: #fff; color: #333; padding: 16px 20px; border-radius: 12px; max-width: 85%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+    #hint-box strong { display: block; margin-bottom: 6px; font-size: 16px; }
+  </style>
+</head>
+<body>
+    <!-- Game Mode Selection Menu -->
+    <div class="game-mode-menu" id="mode-menu">
+        <div class="menu-content">
+            <h2>Game Mode</h2>
+            <div class="mode-buttons">
+                <button class="mode-button selected" data-mode="single">
+                    <span class="mode-title">Single Player</span>
+                    <span class="mode-description">Play solo</span>
+                </button>
+                <button class="mode-button" data-mode="two-player">
+                    <span class="mode-title">Two Player</span>
+                    <span class="mode-description">First to 20 wins!</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Score Display -->
+    <div class="compact-header">
+        <!-- Single Player Header -->
+        <div class="single-player-header" id="single-header">
+            <span class="header-item">W: <span id="wins-count">0</span></span>
+            <span class="header-item">L: <span id="losses-count">0</span></span>
+            <span class="header-item">Time: <span id="timer-display">30</span></span>
+        </div>
+    
+        <!-- Two Player Header -->
+        <div class="two-player-header" id="two-player-header" style="display: none;">
+            <span class="header-item">P1: <span id="player1-score">0</span></span>
+            <span class="header-item">P2: <span id="player2-score">0</span></span>
+            <span class="header-item" id="current-player-indicator">P1 Turn</span>
+            <span class="header-item">Time: <span id="timer-display-2">30</span></span>
+        </div>
+    </div>
+
+    <!-- Winner Modal for Two Player -->
+    <div class="winner-modal" id="winner-modal">
+        <div class="content">
+            <div class="emoji-large">😊</div>
+            <h4 id="winner-title">Match Winner!</h4>
+            <p id="winner-text">Player 1 wins!</p>
+            <button class="new-match-btn">New Match</button>
+        </div>
+    </div>
+
+    <!-- Game Modal -->
+    <div class="game-modal">
+        <div class="content">
+            <div class="emoji-large" id="game-result-emoji">😔</div>
+            <h4>Game Over!</h4>
+            <p>The word was: <b>rainbow</b></p>
+            <button class="play-again">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div class="container">
+        <!-- Timer Display -->
+        <div class="timer-container">
+            <div class="timer-value" id="timer-display">30</div>
+        </div>
+
+        <!-- Hangman Display - CSS Only -->
+        <div class="hangman-container">
+            <div class="hangman-drawing" id="hangman-drawing">
+                <!-- Gallows -->
+                <div class="gallows-base"></div>
+                <div class="gallows-pole"></div>
+                <div class="gallows-beam"></div>
+                <div class="gallows-noose"></div>
+                
+                <!-- Hangman parts (initially hidden) -->
+                <div class="hangman-head hangman-part"></div>
+                <div class="hangman-body hangman-part"></div>
+                <div class="hangman-left-arm hangman-part"></div>
+                <div class="hangman-right-arm hangman-part"></div>
+                <div class="hangman-left-leg hangman-part"></div>
+                <div class="hangman-right-leg hangman-part"></div>
+            </div>
+        </div>
+        
+        <!-- Word Display -->
+        <ul class="word-display"></ul>
+        
+        <!-- Game Controls -->
+        <div class="game-controls">
+            <button class="hint-button" id="hint-btn">Hint</button>
+            <div class="guesses-text">Wrong: <span id="guess-count">0/6</span></div>
+        </div>
+        
+        <h4 class="hint-text" id="hint-display" style="display: none;">Hint: <b></b></h4>
+        
+        <!-- Keyboard -->
+        <div class="keyboard">
+            <div class="keyboard-row" id="keyboard-container"><button data-letter="a">A</button><button data-letter="b">B</button><button data-letter="c">C</button><button data-letter="d">D</button><button data-letter="e">E</button><button data-letter="f">F</button><button data-letter="g">G</button><button data-letter="h">H</button><button data-letter="i">I</button><button data-letter="j">J</button><button data-letter="k">K</button><button data-letter="l">L</button><button data-letter="m">M</button><button data-letter="n">N</button><button data-letter="o">O</button><button data-letter="p">P</button><button data-letter="q">Q</button><button data-letter="r">R</button><button data-letter="s">S</button><button data-letter="t">T</button><button data-letter="u">U</button><button data-letter="v">V</button><button data-letter="w">W</button><button data-letter="x">X</button><button data-letter="y">Y</button><button data-letter="z">Z</button></div>
+        </div>
+
+        <!-- Submit Selected Letter -->
+        <div class="submit-container">
+            <button id="submit-letter-btn" disabled>Submit</button>
+        </div>
+    </div>
+
+    <!-- Hint Overlay -->
+    <div id="hint-overlay">
+        <div id="hint-box">
+            <strong>Hint</strong>
+            <div id="hint-box-text"></div>
+            <div style="margin-top:8px;font-size:12px;opacity:0.7;">Tap anywhere to dismiss</div>
+        </div>
+    </div>
+
+</body></html>
