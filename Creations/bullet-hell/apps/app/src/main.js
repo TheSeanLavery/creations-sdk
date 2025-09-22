@@ -23,7 +23,7 @@ world.player.lives = config.world.playerLives
 const fpsEl = document.createElement('div')
 fpsEl.style.position = 'fixed'
 fpsEl.style.left = '8px'
-fpsEl.style.top = '8px'
+fpsEl.style.top = (config.ui.perfOffsetTopPx != null ? String(config.ui.perfOffsetTopPx) : '8') + 'px'
 fpsEl.style.padding = '4px 6px'
 fpsEl.style.background = 'rgba(0,0,0,0.5)'
 fpsEl.style.color = '#0f0'
@@ -31,7 +31,21 @@ fpsEl.style.fontFamily = 'monospace'
 fpsEl.style.fontSize = '12px'
 fpsEl.style.zIndex = '1000'
 fpsEl.style.pointerEvents = 'none'
-document.body.appendChild(fpsEl)
+if (config.ui.showPerfOverlay) document.body.appendChild(fpsEl)
+
+// Score overlay
+const scoreEl = document.createElement('div')
+scoreEl.style.position = 'fixed'
+scoreEl.style.right = '8px'
+scoreEl.style.top = '8px'
+scoreEl.style.padding = '4px 6px'
+scoreEl.style.background = 'rgba(0,0,0,0.5)'
+scoreEl.style.color = '#0f0'
+scoreEl.style.fontFamily = 'monospace'
+scoreEl.style.fontSize = '12px'
+scoreEl.style.zIndex = '1000'
+scoreEl.style.pointerEvents = 'none'
+document.body.appendChild(scoreEl)
 
 const fpsWindowMs = 1000
 let fpsDurationsMs = []
@@ -73,6 +87,12 @@ deviceControls.on('scrollWheel', ({ direction }) => {
 let enemySpawnTimer = 0
 let enemyFireTimer = 0
 let playerFireTimer = 0
+
+// Scoring
+let score = 0
+let combo = 0
+let highScore = 0
+try { highScore = parseInt(localStorage.getItem(config.scoring.highScoreKey) || '0', 10) || 0 } catch (_) { highScore = 0 }
 
 // Horizontal velocity-based movement (scroll impulses + key accel)
 let hVel = 0
@@ -119,7 +139,7 @@ function render(timeMs) {
   fpsDurationsMs.push(frameDtMs)
   fpsSumMs += frameDtMs
   while (fpsSumMs > fpsWindowMs && fpsDurationsMs.length > 0) fpsSumMs -= fpsDurationsMs.shift()
-  if (fpsDurationsMs.length > 0) {
+  if (fpsDurationsMs.length > 0 && config.ui.showPerfOverlay) {
     const n = fpsDurationsMs.length
     const avgDt = fpsSumMs / n
     const avgFps = 1000 / Math.max(0.0001, avgDt)
@@ -128,6 +148,8 @@ function render(timeMs) {
     const low1 = fpsSamples[idx]
     fpsEl.textContent = `fps ${avgFps.toFixed(1)} | 1% ${low1.toFixed(1)} | vsync ${useVsync ? 'on' : 'off'}`
   }
+  // Update score UI
+  scoreEl.textContent = `score ${score}  combo x${combo}  hi ${highScore}`
 
   const dt = Math.max(0, Math.min(0.05, frameDtMs * 0.001))
 
@@ -216,6 +238,8 @@ function render(timeMs) {
       p.invincibleUntil = performance.now() + (config.world.playerInvincibleMs || 2000)
       hVel = 0
       enemySpawnTimer = config.enemy.spawn.baseInterval
+      score = 0
+      combo = 0
       restartRequested = false
     }
   } else {
@@ -246,6 +270,11 @@ function render(timeMs) {
         world.playerBullets.pop(); bi--
         hit = true
         if (e.hp <= 0) {
+          // score and combo
+          combo = Math.min(config.scoring.comboMax, combo + 1)
+          const gain = (config.scoring.enemyKillBase * Math.max(1, combo)) | 0
+          score += gain
+          if (score > highScore) { highScore = score; try { localStorage.setItem(config.scoring.highScoreKey, String(highScore)) } catch (_) {} }
           world.enemies[idx] = world.enemies[world.enemies.length - 1]
           world.enemies.pop()
         }
@@ -262,6 +291,7 @@ function render(timeMs) {
       if (aabbIntersect(world.player.x, world.player.y, 1, 1, b.x, b.y, b.w, b.h)) {
         // lose a life, respawn with invincibility
         p.lives -= 1
+        combo = 0
         if (p.lives > 0) {
           p.x = 0
           p.y = -world.height + (config.world.bottomYOffsetPx || 24)

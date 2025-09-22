@@ -38,6 +38,15 @@ const config = {
     capacity: 8,
     maxDepth: 7,
   },
+  scoring: {
+    enemyKillBase: 100,
+    comboMax: 9,
+    highScoreKey: 'bh_highscore',
+  },
+  ui: {
+    showPerfOverlay: true,
+    perfOffsetTopPx: 28,
+  },
 }
 
 export default config
