@@ -151,26 +151,31 @@ let logScale = Math.log(1.5) // half-height in complex plane units
 let lastScrollTimeMs = 0
 let lastScrollDir = 0 // +1 up, -1 down
 let perScrollCount = 1
-const rampWindowMs = 2000
+const rampWindowMs = 800 // shorter ramp window for finer control
 let zoomVelocity = 0 // units per second applied to -logScale (zoom in on up)
-const decayRate = 0.4 // s^-1 exponential decay
+const decayRate = 1.2 // stronger decay so momentum dies quicker
+const ZOOM_STEP = 0.12 // base sensitivity multiplier (smaller = slower)
+const MAX_RAMP = 6 // clamp ramping to avoid runaway acceleration
 
 deviceControls.on('scrollWheel', ({ direction }) => {
   const now = performance.now()
   const dir = direction === 'up' ? 1 : -1
-  if (dir === lastScrollDir && (now - lastScrollTimeMs) < rampWindowMs) perScrollCount += 1
+  if (dir === lastScrollDir && (now - lastScrollTimeMs) < rampWindowMs) perScrollCount = Math.min(MAX_RAMP, perScrollCount + 1)
   else perScrollCount = 1
   lastScrollTimeMs = now
   lastScrollDir = dir
-  zoomVelocity += dir * perScrollCount
+  zoomVelocity += dir * perScrollCount * ZOOM_STEP
 })
 
 // Click/touch to recenter at pointer in complex plane
 function setCenterFromClient(clientX, clientY) {
   const rect = canvas.getBoundingClientRect()
-  const dpr = Math.min(window.devicePixelRatio || 1, 2)
-  const px = (clientX - rect.left) * dpr
-  const py = (clientY - rect.top) * dpr
+  // Use actual ratio from canvas backing store rather than assuming DPR
+  const scaleX = canvas.width / Math.max(1, rect.width)
+  const scaleY = canvas.height / Math.max(1, rect.height)
+  // Align to pixel centers (+0.5) to match gl_FragCoord semantics
+  const px = (clientX - rect.left) * scaleX + 0.5
+  const py = (clientY - rect.top) * scaleY + 0.5
   const w = Math.max(1, canvas.width)
   const h = Math.max(1, canvas.height)
   const uvx = px / w
