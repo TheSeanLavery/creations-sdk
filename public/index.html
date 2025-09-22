@@ -103,6 +103,16 @@
         image-rendering: auto;
         z-index: 300; /* above viewport */
       }
+      .overlay-title {
+        position: fixed;
+        z-index: 310; /* above overlay */
+        color: #0f172a;
+        font-weight: 600;
+        font-size: 14px;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+        pointer-events: none;
+      }
       .input-panel {
         position: fixed;
         width: 44px;
@@ -349,7 +359,11 @@
           <iframe src="about:blank" allow="camera; microphone; clipboard-read; clipboard-write; autoplay"></iframe>
         </div>
         <img id="overlay" class="overlay-img" src="/r1.png" alt="Overlay" />
+        <div id="overlay-title" class="overlay-title"></div>
         <div id="input-panel" class="input-panel" title="Scroll here • Click for Side Button"></div>
+        <div id="under-controls" class="under-controls">
+          <img id="big-qr-img" alt="Big QR" style="display:block; width: 240px; height: 240px; border: 1px solid #e2e8f0; background: #fff;" />
+        </div>
         
       </div>
       <aside>
@@ -509,6 +523,22 @@
         // Just use the direct URL from the form
         input.value = data.url;
       }
+      async function syncBigQr(){
+        try {
+          const data = getFormData();
+          const img = document.getElementById('big-qr-img');
+          const overlay = document.getElementById('overlay');
+          if (!img || !overlay) return;
+          if (!data.title && !data.url && !data.description) { img.removeAttribute('src'); return; }
+          const rect = overlay.getBoundingClientRect();
+          const sizePx = Math.max(64, Math.min(2048, Math.round(rect.width * 0.9)));
+          img.style.width = sizePx + 'px';
+          img.style.height = sizePx + 'px';
+          const payload = JSON.stringify(data);
+          const { toDataURL } = await import('./js/qr-lib.js');
+          img.src = await toDataURL(payload, { width: sizePx, margin: 1 });
+        } catch (_) {}
+      }
       async function generateJsonQr(){
         const data = getFormData();
         if (!data.title && !data.url && !data.description) return;
@@ -517,6 +547,7 @@
         const { toDataURL } = await import('./js/qr-lib.js');
         img.src = await toDataURL(payload, { width: 260, margin: 1 });
         updateShareUrl();
+        try { await syncBigQr(); } catch (_) {}
       }
       function downloadJsonQr(){
         const img = document.getElementById('json-qr-img');
@@ -734,6 +765,14 @@
           overlay.style.top = `${pageTop}px`;
           overlay.style.transform = `scale(${s})`;
           overlay.style.transformOrigin = 'top left';
+          // Position overlay title centered at top of overlay area
+          const titleEl = document.getElementById('overlay-title');
+          if (titleEl) {
+            const titleLeft = rect.left + x + 12; // small inset from left of overlay
+            const titleTop = rect.top + (y - STATUSBAR_HEIGHT) - 18; // tiny extra margin below title
+            titleEl.style.left = `${titleLeft}px`;
+            titleEl.style.top = `${titleTop}px`;
+          }
           // Position input panel to the right of the viewport content area
           const panel = document.getElementById('input-panel');
           if (panel) {
@@ -756,12 +795,12 @@
           ssNum.value = s.toFixed(2);
         }
         // bind both slider and number inputs
-        sx.addEventListener('input', applyOverlay);
-        sy.addEventListener('input', applyOverlay);
-        ss.addEventListener('input', applyOverlay);
-        sxNum.addEventListener('input', () => { sx.value = sxNum.value; applyOverlay(); });
-        syNum.addEventListener('input', () => { sy.value = syNum.value; applyOverlay(); });
-        ssNum.addEventListener('input', () => { ss.value = ssNum.value; applyOverlay(); });
+        sx.addEventListener('input', () => { applyOverlay(); positionUnderControls(); syncBigQr(); });
+        sy.addEventListener('input', () => { applyOverlay(); positionUnderControls(); syncBigQr(); });
+        ss.addEventListener('input', () => { applyOverlay(); positionUnderControls(); syncBigQr(); });
+        sxNum.addEventListener('input', () => { sx.value = sxNum.value; applyOverlay(); positionUnderControls(); syncBigQr(); });
+        syNum.addEventListener('input', () => { sy.value = syNum.value; applyOverlay(); positionUnderControls(); syncBigQr(); });
+        ssNum.addEventListener('input', () => { ss.value = ssNum.value; applyOverlay(); positionUnderControls(); syncBigQr(); });
         document.getElementById('ov-reset').addEventListener('click', () => { sx.value = -31; sy.value = -91; ss.value = 0.49; applyOverlay(); });
         // keep overlay, panel, and under-controls locked to iframe position on resize/scroll
         window.addEventListener('resize', applyOverlay);
@@ -776,6 +815,8 @@
         sy.value = '-17';
         ss.value = '0.49';
         applyOverlay();
+        try { positionUnderControls(); } catch (_) {}
+        try { await syncBigQr(); } catch (_) {}
         // Input panel interactions: wheel -> scrollUp/Down, click -> sideClick
         (function bindInputPanel(){
           const panel = document.getElementById('input-panel');
@@ -841,14 +882,28 @@
         (function positionUnderControls(){
           const uc = document.getElementById('under-controls');
           const stage = document.querySelector('.stage');
-          const vpRect = vp.getBoundingClientRect();
           const stRect = stage ? stage.getBoundingClientRect() : { left: 0, top: 0 };
-          const ucLeft = (vpRect.left - stRect.left);
-          const ucTop = (vpRect.bottom - stRect.top) + 8; // 8px gap
-          if (uc) {
-            uc.style.left = `${ucLeft}px`;
-            uc.style.top = `${ucTop}px`;
+          const overlay = document.getElementById('overlay');
+          const bigQr = document.getElementById('big-qr-img');
+          if (!uc || !overlay) return;
+          const ovRect = overlay.getBoundingClientRect();
+          // Desired QR size is 90% of overlay width
+          const sizePx = Math.max(64, Math.min(2048, Math.round(ovRect.width * 0.9)));
+          // Center under the overlay with a 5% leftward offset
+          const centerX = ovRect.left + ovRect.width * 0.5;
+          const offsetX = ovRect.width * 0.05; // 5% shift to the left
+          const ucLeft = (centerX - sizePx * 0.5 - offsetX) - stRect.left;
+          const ucTop = (ovRect.bottom - stRect.top) + 12; // place below overlay
+          uc.style.left = `${ucLeft}px`;
+          uc.style.top = `${ucTop}px`;
+          uc.style.width = `${sizePx}px`;
+          // Match QR size (square)
+          if (bigQr) {
+            bigQr.style.width = sizePx + 'px';
+            bigQr.style.height = sizePx + 'px';
           }
+          // Regenerate to match new size
+          try { syncBigQr(); } catch (_) {}
           // Reposition on changes
           window.addEventListener('resize', positionUnderControls);
           window.addEventListener('scroll', positionUnderControls, { passive: true });
@@ -882,6 +937,14 @@
           } catch (_) { /* ignore */ }
         })();
 
+        // Keep overlay title synced with creation title changes
+        const titleEl = document.getElementById('f-title');
+        const overlayTitle = document.getElementById('overlay-title');
+        if (titleEl && overlayTitle) {
+          const syncTitle = () => { overlayTitle.textContent = titleEl.value || ''; };
+          titleEl.addEventListener('input', syncTitle);
+          syncTitle();
+        }
         await autoFillFromParamsOrNetwork();
       });
       
