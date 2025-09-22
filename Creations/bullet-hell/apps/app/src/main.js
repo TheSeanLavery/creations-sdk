@@ -3,6 +3,7 @@ import uiDesign from './lib/ui-design.js'
 import { createRenderer } from './engine/renderer2d.js'
 import { QuadTree } from './engine/quadtree.js'
 import { createWorld, spawnEnemy, firePlayerBullet, fireEnemyBullet, updateWorld, clampPlayer } from './engine/entities.js'
+import config from './config.js'
 
 // Configure viewport for device-like behavior
 uiDesign.setupViewport()
@@ -15,7 +16,8 @@ const renderer = createRenderer(canvas)
 const world = createWorld()
 // Initial player spawn
 world.player.x = 0
-world.player.y = -world.height + 24
+world.player.y = -world.height + (config.world.bottomYOffsetPx || 24)
+world.player.lives = config.world.playerLives
 
 // FPS overlay (rolling 1s window, avg and 1% low)
 const fpsEl = document.createElement('div')
@@ -78,10 +80,10 @@ let lastScrollTimeMs = 0
 let lastScrollDir = 0 // +1 up/right, -1 down/left
 let perScrollCount = 1
 const rampWindowMs = 2000
-const decayRate = 3 // s^-1 friction
-const scrollImpulse = 40 // px/s increment per event, ramps
-const keyAccel = 1200 // px/s^2
-const maxKeySpeed = 320 // px/s cap from keys
+const decayRate = config.player.frictionPerSec // s^-1 friction
+const scrollImpulse = config.player.scrollImpulse // px/s increment per event, ramps
+const keyAccel = config.player.keyAccel // px/s^2
+const maxKeySpeed = config.player.maxKeySpeed // px/s cap from keys
 
 // Instance buffer assembly
 const MAX_VISIBLE = 16384
@@ -131,7 +133,7 @@ function render(timeMs) {
 
   // Input → player
   const p = world.player
-  const moveSpeedY = 180
+  const moveSpeedY = config.player.moveSpeedY
   let mx = 0, my = 0
   if (keys.has('arrowleft') || keys.has('a')) mx -= 1
   if (keys.has('arrowright') || keys.has('d')) mx += 1
@@ -157,29 +159,43 @@ function render(timeMs) {
   // On first frame after resize ensure bottom spawn
   if (world.time === 0) {
     p.x = 0
-    p.y = -world.height + 24 // bottom edge in our coord system (positive y up), bottom is -height
+    p.y = -world.height + (config.world.bottomYOffsetPx || 24) // bottom edge in our coord system (positive y up)
   }
 
   // Spawning
   enemySpawnTimer -= dt
   if (enemySpawnTimer <= 0) {
     const ex = (Math.random() * 2 - 1) * (world.width - 20)
-    // Spawn at the top edge and move downward (negative vy)
-    spawnEnemy(world, ex, world.height - 20, -(40 + Math.random() * 30))
-    enemySpawnTimer = 0.75
+    // Spawn at the top edge and move downward (negative vy) with config speed range
+    const spd = -(config.enemy.speedMin + Math.random() * (config.enemy.speedMax - config.enemy.speedMin))
+    spawnEnemy(world, ex, world.height - 20, spd)
+    // Dynamic interval: base minus elapsed*accel, clamped
+    const base = config.enemy.spawn.baseInterval
+    const dec = (config.enemy.spawn.accelPerSec || 0) * world.time
+    enemySpawnTimer = Math.max(config.enemy.spawn.minInterval, base - dec)
   }
   enemyFireTimer -= dt
   if (enemyFireTimer <= 0 && world.enemies.length > 0 && p.alive) {
     const e = world.enemies[(Math.random() * world.enemies.length) | 0]
     const dx = p.x - e.x, dy = p.y - e.y
-    fireEnemyBullet(world, e.x, e.y, dx, dy, 140 + Math.random() * 60)
-    enemyFireTimer = 0.6
+    const bs = config.enemy.bulletSpeedMin + Math.random() * (config.enemy.bulletSpeedMax - config.enemy.bulletSpeedMin)
+    fireEnemyBullet(world, e.x, e.y, dx, dy, bs)
+    enemyFireTimer = config.enemy.fireInterval
   }
-  // Auto-shoot player (shoot upward)
+  // Auto-shoot player (shoot upward) with spread
   playerFireTimer -= dt
   if (p.alive && playerFireTimer <= 0) {
-    firePlayerBullet(world, p.x, p.y + 12, 0, 1, 300)
-    playerFireTimer = 0.09
+    const n = Math.max(1, config.player.spray.count|0)
+    const spread = (config.player.spray.spreadDeg || 0) * Math.PI / 180
+    const centerAngle = Math.PI/2 // up
+    const start = centerAngle - spread/2
+    const step = n > 1 ? spread / (n - 1) : 0
+    for (let i = 0; i < n; i++) {
+      const ang = start + step * i
+      const dx = Math.cos(ang), dy = Math.sin(ang)
+      firePlayerBullet(world, p.x, p.y + 12, dx, dy, config.player.autoBulletSpeed)
+    }
+    playerFireTimer = config.player.autoFireInterval
   }
 
   // Integrate
@@ -194,11 +210,12 @@ function render(timeMs) {
       world.playerBullets.length = 0
       world.enemyBullets.length = 0
       p.x = 0
-      p.y = -world.height + 24
+      p.y = -world.height + (config.world.bottomYOffsetPx || 24)
       p.alive = true
-      p.lives = 3
-      p.invincibleUntil = performance.now() + 2000
+      p.lives = config.world.playerLives
+      p.invincibleUntil = performance.now() + (config.world.playerInvincibleMs || 2000)
       hVel = 0
+      enemySpawnTimer = config.enemy.spawn.baseInterval
       restartRequested = false
     }
   } else {
@@ -247,8 +264,8 @@ function render(timeMs) {
         p.lives -= 1
         if (p.lives > 0) {
           p.x = 0
-          p.y = -world.height + 24
-          p.invincibleUntil = performance.now() + 2000
+          p.y = -world.height + (config.world.bottomYOffsetPx || 24)
+          p.invincibleUntil = performance.now() + (config.world.playerInvincibleMs || 2000)
           // clear nearby bullets to avoid instant hit
           world.enemyBullets = world.enemyBullets.filter(bb => Math.hypot(bb.x - p.x, bb.y - p.y) > 32)
           hVel = 0
