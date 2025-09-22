@@ -144,7 +144,7 @@ function resize() {
   gl.viewport(0, 0, canvas.width, canvas.height)
 }
 
-// FPS overlay
+// FPS overlay (rolling 1s window, avg and 1% low)
 const fpsEl = document.createElement('div')
 fpsEl.style.position = 'fixed'
 fpsEl.style.left = '8px'
@@ -158,32 +158,10 @@ fpsEl.style.zIndex = '1000'
 fpsEl.style.pointerEvents = 'none'
 document.body.appendChild(fpsEl)
 
-const frameTimes = []
-let lastTimeMs = performance.now()
-
-function updateFps(now) {
-  const dt = now - lastTimeMs
-  lastTimeMs = now
-  frameTimes.push(dt)
-  // keep only last 1000ms
-  let sum = 0
-  for (let i = frameTimes.length - 1; i >= 0; i--) {
-    sum += frameTimes[i]
-    if (sum > 1000) {
-      frameTimes.splice(0, i)
-      break
-    }
-  }
-  // compute avg and 1% low
-  const n = frameTimes.length
-  if (n === 0) return
-  const avgDt = frameTimes.reduce((a, b) => a + b, 0) / n
-  const avgFps = 1000 / avgDt
-  const fpsSamples = frameTimes.map(t => 1000 / Math.max(0.0001, t)).sort((a, b) => a - b)
-  const idx = Math.max(0, Math.floor(0.01 * n) - 1)
-  const low1 = fpsSamples[idx]
-  fpsEl.textContent = `fps ${avgFps.toFixed(1)} | 1% ${low1.toFixed(1)}`
-}
+const fpsWindowMs = 1000
+let fpsDurationsMs = []
+let fpsSumMs = 0
+let renderPrevTimeMs = performance.now()
 
 // Instancing data with object pool
 let poolCapacity = 256
@@ -291,8 +269,25 @@ for (let i = 0; i < 10; i++) addCube(nextSphereOffsetFromCamera())
 function render(timeMs) {
   resize()
   const t = timeMs * 0.001
+  // FPS tracking
+  const frameDtMs = timeMs - renderPrevTimeMs
+  renderPrevTimeMs = timeMs
+  fpsDurationsMs.push(frameDtMs)
+  fpsSumMs += frameDtMs
+  while (fpsSumMs > fpsWindowMs && fpsDurationsMs.length > 0) {
+    fpsSumMs -= fpsDurationsMs.shift()
+  }
+  if (fpsDurationsMs.length > 0) {
+    const n = fpsDurationsMs.length
+    const avgDt = fpsSumMs / n
+    const avgFps = 1000 / Math.max(0.0001, avgDt)
+    const fpsSamples = fpsDurationsMs.map(d => 1000 / Math.max(0.0001, d)).sort((a, b) => a - b)
+    const idx = Math.max(0, Math.floor(0.01 * n))
+    const low1 = fpsSamples[idx]
+    fpsEl.textContent = `fps ${avgFps.toFixed(1)} | 1% ${low1.toFixed(1)} | N ${n}`
+  }
   // Update momentum-based add/remove
-  const dt = Math.max(0, Math.min(0.1, (timeMs - lastTimeMs) * 0.001))
+  const dt = Math.max(0, Math.min(0.1, frameDtMs * 0.001))
   // Exponential decay towards 0
   const decay = Math.exp(-decayRate * dt)
   velocity *= decay
@@ -356,7 +351,6 @@ function ensureCanvasCssSize() {
 }
 
 ensureCanvasCssSize()
-updateFps(performance.now())
 requestAnimationFrame(render)
 
 // Optional: react to device side button to toggle rotation direction
