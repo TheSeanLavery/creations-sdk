@@ -10,7 +10,8 @@ class UIDesign {
       viewport.name = 'viewport';
       document.head.appendChild(viewport);
     }
-    viewport.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+    // Use fixed device logical size to match R1 (UI 28px + content 254px)
+    viewport.content = 'width=240, height=320, initial-scale=1, maximum-scale=1, user-scalable=no';
   }
 }
 

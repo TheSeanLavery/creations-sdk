@@ -170,16 +170,11 @@ deviceControls.on('scrollWheel', ({ direction }) => {
 // Click/touch to recenter at pointer in complex plane
 function setCenterFromClient(clientX, clientY) {
   const rect = canvas.getBoundingClientRect()
-  // Use actual ratio from canvas backing store rather than assuming DPR
-  const scaleX = canvas.width / Math.max(1, rect.width)
-  const scaleY = canvas.height / Math.max(1, rect.height)
-  // Align to pixel centers (+0.5) to match gl_FragCoord semantics
-  const px = (clientX - rect.left) * scaleX + 0.5
-  const py = (clientY - rect.top) * scaleY + 0.5
+  // Map in normalized UV space using the same unit for client and rect
+  const uvx = (clientX - rect.left) / Math.max(1, rect.width)
+  const uvy = 1 - ((clientY - rect.top) / Math.max(1, rect.height))
   const w = Math.max(1, canvas.width)
   const h = Math.max(1, canvas.height)
-  const uvx = px / w
-  const uvy = 1 - (py / h) // DOM y is top-down; GL is bottom-up
   const aspect = w / h
   const scale = Math.exp(logScale)
   const halfH = scale
@@ -197,13 +192,6 @@ function setCenterFromClient(clientX, clientY) {
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault()
   setCenterFromClient(e.clientX, e.clientY)
-})
-canvas.addEventListener('touchstart', (e) => {
-  if (e.touches && e.touches.length > 0) {
-    e.preventDefault()
-    const t = e.touches[0]
-    setCenterFromClient(t.clientX, t.clientY)
-  }
 }, { passive: false })
 
 function render(timeMs) {
@@ -252,8 +240,10 @@ function render(timeMs) {
 }
 
 function ensureCanvasCssSize() {
-  if (!canvas.style.width) canvas.style.width = '100vw'
-  if (!canvas.style.height) canvas.style.height = '100vh'
+  // Match device logical resolution and aspect (content 254px tall under 28px bar)
+  // Keep CSS sized to 240x254 area to avoid UI overlay scaling mismatch
+  canvas.style.width = '240px'
+  canvas.style.height = '254px'
   canvas.style.display = 'block'
 }
 
