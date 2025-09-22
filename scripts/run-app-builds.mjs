@@ -1,6 +1,7 @@
-import { readdir, stat, chmod } from 'fs/promises';
+import { readdir, stat, chmod, readFile, mkdir, writeFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { spawn } from 'child_process';
+import { createHash } from 'crypto';
 
 const ROOT = process.cwd();
 const CREATIONS_DIR_LOWER = join(ROOT, 'creations');
@@ -9,6 +10,7 @@ const CREATIONS_DIR = (await (async () => {
   try { await stat(CREATIONS_DIR_LOWER); return CREATIONS_DIR_LOWER; } catch {}
   return CREATIONS_DIR_UPPER;
 })());
+const CACHE_DIR = join(ROOT, '.buildcache');
 
 async function pathExists(p) {
   try { await stat(p); return true; } catch { return false; }
@@ -54,6 +56,75 @@ async function runBuildScript(buildPath) {
   }
 }
 
+async function listFilesRec(dir) {
+  const out = [];
+  async function walk(d) {
+    let entries = [];
+    try { entries = await readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      const abs = join(d, ent.name);
+      if (ent.isDirectory()) await walk(abs);
+      else if (ent.isFile()) out.push(abs);
+    }
+  }
+  await walk(dir);
+  return out;
+}
+
+async function gatherAppInputs(appDir) {
+  const files = [];
+  async function maybePush(p) { if (await pathExists(p)) files.push(p); }
+  await maybePush(join(appDir, 'build.sh'));
+  await maybePush(join(appDir, 'index.html'));
+  await maybePush(join(appDir, 'vite.config.js'));
+  await maybePush(join(appDir, 'package.json'));
+  await maybePush(join(appDir, 'package-lock.json'));
+  const srcDir = join(appDir, 'src');
+  if (await pathExists(srcDir)) {
+    const srcFiles = await listFilesRec(srcDir);
+    files.push(...srcFiles);
+  }
+  // Deterministic order
+  files.sort();
+  return files;
+}
+
+async function computeHashForFiles(files, rootPrefix) {
+  const h = createHash('sha256');
+  for (const f of files) {
+    const rel = f.startsWith(rootPrefix) ? f.slice(rootPrefix.length + 1) : f;
+    h.update(rel);
+    try {
+      const buf = await readFile(f);
+      h.update(buf);
+    } catch {}
+  }
+  return h.digest('hex');
+}
+
+function cacheKeyForApp(appDir) {
+  // Use path relative to ROOT, replace separators
+  const rel = appDir.startsWith(ROOT) ? appDir.slice(ROOT.length + 1) : appDir;
+  const safe = rel.replace(/[^a-zA-Z0-9_.\-]/g, '_');
+  return join(CACHE_DIR, `${safe}.hash`);
+}
+
+async function shouldBuild(appDir) {
+  await mkdir(CACHE_DIR, { recursive: true });
+  const files = await gatherAppInputs(appDir);
+  const hash = await computeHashForFiles(files, ROOT);
+  const keyPath = cacheKeyForApp(appDir);
+  let prev = '';
+  try { prev = (await readFile(keyPath, 'utf8')).trim(); } catch {}
+  const distExists = await pathExists(join(appDir, 'dist'));
+  const changed = hash !== prev;
+  return { changed, hash, keyPath, distExists };
+}
+
+async function recordHash(keyPath, hash) {
+  try { await writeFile(keyPath, `${hash}\n`, 'utf8'); } catch {}
+}
+
 async function main() {
   const exists = await pathExists(CREATIONS_DIR);
   if (!exists) {
@@ -73,7 +144,14 @@ async function main() {
     if (!(await pathExists(appsDir))) continue;
     const builds = await findBuildScripts(appsDir, 3);
     for (const buildPath of builds) {
+      const appDir = dirname(buildPath);
+      const { changed, hash, keyPath, distExists } = await shouldBuild(appDir);
+      if (!changed && distExists) {
+        console.log(`[apps] Skipping ${appDir} (no changes)`);
+        continue;
+      }
       await runBuildScript(buildPath);
+      await recordHash(keyPath, hash);
     }
   }
 }
