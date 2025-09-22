@@ -19,6 +19,10 @@
     {
       "label": "webglDemo",
       "url": "/creations/webglDemo/index.html"
+    },
+    {
+      "label": "webglMulticore",
+      "url": "/creations/webglMulticore/index.html"
     }
   ]
 }
