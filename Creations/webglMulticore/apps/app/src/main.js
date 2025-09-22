@@ -162,6 +162,8 @@ const fpsWindowMs = 1000
 let fpsDurationsMs = []
 let fpsSumMs = 0
 let renderPrevTimeMs = performance.now()
+// VSync toggle (default off). Must be initialized before first scheduleNext() call
+let useVsync = false
 
 // Instancing data with object pool
 let poolCapacity = 256
@@ -354,7 +356,6 @@ ensureCanvasCssSize()
 scheduleNext()
 
 // VSync toggle/scheduler (vsync off by default)
-let useVsync = false
 function scheduleNext() {
   if (useVsync) {
     requestAnimationFrame(render)
