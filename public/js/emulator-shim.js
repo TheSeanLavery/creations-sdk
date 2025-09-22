@@ -4,6 +4,7 @@
   let targetWin = null; // iframe contentWindow
   let emulatorEnabled = true;
   let nativeDetected = false;
+  let scrollTicksPerEvent = 8; // configurable via UI (1..200)
 
   // Accelerometer state and timers
   const accelState = { x: 0, y: 0, z: 1 };
@@ -137,6 +138,18 @@
       });
     }
 
+    // Scroll ticks per event (wheel sensitivity)
+    const ticksRange = $id('emu-scroll-ticks');
+    const ticksNum = $id('emu-scroll-ticks-num');
+    const applyTicks = (v) => {
+      const n = clamp(parseInt(String(v), 10) || 8, 1, 200);
+      scrollTicksPerEvent = n;
+      if (ticksRange && ticksRange.value !== String(n)) ticksRange.value = String(n);
+      if (ticksNum && ticksNum.value !== String(n)) ticksNum.value = String(n);
+    };
+    if (ticksRange) { ticksRange.value = String(scrollTicksPerEvent); ticksRange.addEventListener('input', () => applyTicks(ticksRange.value)); }
+    if (ticksNum) { ticksNum.value = String(scrollTicksPerEvent); ticksNum.addEventListener('input', () => applyTicks(ticksNum.value)); }
+
     // Tilt sliders and numbers
     const bindPair = (rangeId, numId, key) => {
       const r = $id(rangeId);
@@ -175,15 +188,12 @@
 
     // Wheel mapping on viewport with step threshold
     let vpWheelSteps = 0;
-    let vpLastDir = null;
-    const vpTriggerSteps = 20; // require more wheel events before triggering (less sensitive)
     viewport?.addEventListener('wheel', (e) => {
       if (!targetWin) return;
       e.preventDefault(); e.stopPropagation();
       const dir = (e.deltaY || 0) > 0 ? 'down' : 'up';
-      if (dir !== vpLastDir) { vpLastDir = dir; vpWheelSteps = 0; }
       vpWheelSteps += 1;
-      if (vpWheelSteps >= vpTriggerSteps) {
+      if (vpWheelSteps >= scrollTicksPerEvent) {
         vpWheelSteps = 0;
         handleScroll(dir);
       }

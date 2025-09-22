@@ -286,6 +286,13 @@
         <div class="card" id="emulator-card">
           <strong>Emulator Controls</strong>
           <div class="grid">
+            <div>
+              <div class="label">Scroll Ticks per Event (1–200)</div>
+              <div class="row">
+                <input id="emu-scroll-ticks" class="input" type="range" min="1" max="200" value="8" step="1" />
+                <input id="emu-scroll-ticks-num" class="input" type="number" min="1" max="200" step="1" value="8" style="width: 96px;" />
+              </div>
+            </div>
             <div class="two">
               <div>
                 <div class="label">Tilt X (-1..1)</div>
@@ -695,17 +702,19 @@
         (function bindInputPanel(){
           const panel = document.getElementById('input-panel');
           if (!panel) return;
-          // Wheel with threshold to avoid firing on tiny scrolls
+          // Wheel with threshold to avoid firing on tiny scrolls (uses emulator sensitivity slider)
           let panelWheelSteps = 0;
-          let panelLastDir = null;
-          const panelTriggerSteps = 3;
           panel.addEventListener('wheel', (e) => {
             e.preventDefault();
             e.stopPropagation();
             const dir = (e.deltaY || 0) > 0 ? 'down' : 'up';
-            if (dir !== panelLastDir) { panelLastDir = dir; panelWheelSteps = 0; }
             panelWheelSteps += 1;
-            if (panelWheelSteps >= panelTriggerSteps) {
+            const ticksEl = document.getElementById('emu-scroll-ticks');
+            let needed = parseInt((ticksEl && ticksEl.value) || '8', 10);
+            if (!Number.isFinite(needed)) needed = 8;
+            if (needed < 1) needed = 1;
+            if (needed > 200) needed = 200;
+            if (panelWheelSteps >= needed) {
               panelWheelSteps = 0;
               try {
                 const frameWin = document.querySelector('.viewport iframe')?.contentWindow;
