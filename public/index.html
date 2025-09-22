@@ -565,18 +565,29 @@
               sel.appendChild(opt);
             }
             sel.disabled = false;
-            // Auto-select the first creation and load it into the iframe if none is loaded
+            // Restore last selected creation if available, else auto-select first
             const frame = document.querySelector('.viewport iframe');
             const currentSrc = (frame && frame.getAttribute('src')) || '';
+            const saved = localStorage.getItem('lastCreationUrl') || '';
+            const findOptionIndexByValue = (v) => {
+              for (let i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === v) return i;
+              }
+              return -1;
+            };
+            const savedIdx = saved ? findOptionIndexByValue(saved) : -1;
             const shouldAutoSelect = !currentSrc || currentSrc === 'about:blank' || currentSrc.endsWith('/ball/index.html');
             if (shouldAutoSelect && sel.options.length > 1) {
-              sel.selectedIndex = 1;
-              const href = sel.options[1].value;
+              let chosenIdx = 1;
+              if (savedIdx > 0) chosenIdx = savedIdx;
+              sel.selectedIndex = chosenIdx;
+              const href = sel.options[chosenIdx].value;
               frame.src = href;
+              localStorage.setItem('lastCreationUrl', href);
               // Sync QR form URL and title to match iframe selection
               const titleEl = document.getElementById('f-title');
               const urlEl = document.getElementById('f-url');
-              if (titleEl) titleEl.value = sel.options[1].textContent || '';
+              if (titleEl) titleEl.value = sel.options[chosenIdx].textContent || '';
               if (urlEl) urlEl.value = href;
               try { await generateJsonQr(); } catch (_) {}
             }
@@ -587,6 +598,8 @@
             if (frame) {
               frame.src = sel.value; // absolute URL
             }
+            // Persist selection
+            try { localStorage.setItem('lastCreationUrl', sel.value); } catch (_) {}
             // Update QR form to match selected creation
             const titleEl = document.getElementById('f-title');
             const urlEl = document.getElementById('f-url');
