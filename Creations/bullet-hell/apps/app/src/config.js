@@ -1,7 +1,7 @@
 const config = {
   world: {
     playerLives: 3,
-    playerInvincibleMs: 2000,
+    playerInvincibleMs: 4000,
     bottomYOffsetPx: 24,
   },
   player: {
@@ -21,7 +21,7 @@ const config = {
     body: { w: 18, h: 22 },
     speedMin: 40,
     speedMax: 70,
-    fireInterval: 0.6,        // seconds
+    fireInterval: 0.5,        // seconds
     bulletSpeedMin: 140,
     bulletSpeedMax: 200,
     spawn: {
@@ -39,13 +39,13 @@ const config = {
     maxDepth: 7,
   },
   scoring: {
-    enemyKillBase: 100,
+    enemyKillBase: 10,
     comboMax: 9,
     highScoreKey: 'bh_highscore',
   },
   ui: {
     showPerfOverlay: true,
-    perfOffsetTopPx: 28,
+    perfOffsetTopPx: 8,
   },
 }
 

@@ -31,6 +31,7 @@ fpsEl.style.fontFamily = 'monospace'
 fpsEl.style.fontSize = '12px'
 fpsEl.style.zIndex = '1000'
 fpsEl.style.pointerEvents = 'none'
+fpsEl.style.whiteSpace = 'pre'
 if (config.ui.showPerfOverlay) document.body.appendChild(fpsEl)
 
 // Score overlay
@@ -45,13 +46,15 @@ scoreEl.style.fontFamily = 'monospace'
 scoreEl.style.fontSize = '12px'
 scoreEl.style.zIndex = '1000'
 scoreEl.style.pointerEvents = 'none'
+scoreEl.style.whiteSpace = 'pre'
+scoreEl.style.textAlign = 'right'
 document.body.appendChild(scoreEl)
 
 const fpsWindowMs = 1000
 let fpsDurationsMs = []
 let fpsSumMs = 0
 let renderPrevTimeMs = performance.now()
-let useVsync = true
+let useVsync = false
 
 // Input state (keyboard)
 const keys = new Set()
@@ -93,6 +96,9 @@ let score = 0
 let combo = 0
 let highScore = 0
 try { highScore = parseInt(localStorage.getItem(config.scoring.highScoreKey) || '0', 10) || 0 } catch (_) { highScore = 0 }
+function formatScore(n) {
+  return String((n|0) < 0 ? 0 : (n|0)).padStart(8, '0')
+}
 
 // Horizontal velocity-based movement (scroll impulses + key accel)
 let hVel = 0
@@ -146,10 +152,10 @@ function render(timeMs) {
     const fpsSamples = fpsDurationsMs.map(d => 1000 / Math.max(0.0001, d)).sort((a, b) => a - b)
     const idx = Math.max(0, Math.floor(0.01 * n))
     const low1 = fpsSamples[idx]
-    fpsEl.textContent = `fps ${avgFps.toFixed(1)} | 1% ${low1.toFixed(1)} | vsync ${useVsync ? 'on' : 'off'}`
+    fpsEl.textContent = `fps ${avgFps.toFixed(1)}\n1% ${low1.toFixed(1)}\nvsync ${useVsync ? 'on' : 'off'}`
   }
   // Update score UI
-  scoreEl.textContent = `score ${score}  combo x${combo}  hi ${highScore}`
+  scoreEl.textContent = `score ${formatScore(score)}\nhi ${formatScore(highScore)}`
 
   const dt = Math.max(0, Math.min(0.05, frameDtMs * 0.001))
 
