@@ -5,6 +5,10 @@
       "url": "/creations/bouncing_ball_game/index.html"
     },
     {
+      "label": "bullet-hell",
+      "url": "/creations/bullet-hell/index.html"
+    },
+    {
       "label": "hangman",
       "url": "/creations/hangman/index.html"
     },
