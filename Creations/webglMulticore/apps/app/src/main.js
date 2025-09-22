@@ -267,9 +267,9 @@ function nextSphereOffsetFromCamera() {
 let lastScrollTimeMs = 0
 let lastScrollDir = 0 // +1 up, -1 down
 let perScrollCount = 1
-const rampWindowMs = 200
+const rampWindowMs = 2000
 let velocity = 0 // cubes per second; + adds, - removes
-const decayRate = 4 // s^-1 exponential decay
+const decayRate = 0.4 // s^-1 exponential decay
 let pendingAccumulator = 0
 
 deviceControls.on('scrollWheel', ({ direction, event }) => {
