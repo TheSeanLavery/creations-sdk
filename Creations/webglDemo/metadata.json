@@ -1,0 +1,6 @@
+{
+  "title": "WebGL Demo",
+  "description": "WebGL rendering demo. Move and interact in a 2D/3D scene.",
+  "iconUrl": "/icon.jpg",
+  "themeColor": "#FE5000"
+}

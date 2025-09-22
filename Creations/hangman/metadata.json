@@ -1,0 +1,6 @@
+{
+  "title": "Hangman",
+  "description": "Classic hangman game. Guess the word before the man is hanged!",
+  "iconUrl": "/icon.jpg",
+  "themeColor": "#FE5000"
+}

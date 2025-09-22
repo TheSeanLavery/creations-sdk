@@ -1,0 +1,6 @@
+{
+  "title": "Plugin Demo",
+  "description": "Demo showing plugin triggers and hardware APIs.",
+  "iconUrl": "/icon.jpg",
+  "themeColor": "#FE5000"
+}

@@ -451,6 +451,57 @@
           themeColor: document.getElementById('f-color').value || '#FE5000'
         };
       }
+
+      // Metadata support: load metadata.json next to selected creation's index.html
+      function resolveMetadataUrlFromCreationHref(href){
+        try {
+          const u = new URL(href, window.location.origin);
+          const path = u.pathname.replace(/index\.html(?:$|\?.*)/, 'metadata.json');
+          u.pathname = path.endsWith('metadata.json') ? path : (path.replace(/\/?$/, '/') + 'metadata.json');
+          u.search = '';
+          u.hash = '';
+          return u.href;
+        } catch (_) {
+          return null;
+        }
+      }
+      async function tryFetchMetadata(href){
+        const u = new URL(href, window.location.origin);
+        const candidates = [];
+        // 1) Same folder as index.html → metadata.json
+        candidates.push(u.pathname.replace(/index\.html(?:$|\?.*)/, 'metadata.json'));
+        // 2) For dist builds: /dist/index.html → /metadata.json
+        candidates.push(u.pathname.replace(/\/dist\/index\.html(?:$|\?.*)/i, '/metadata.json'));
+        // 3) For apps/app builds: /apps/app/index.html → /metadata.json
+        candidates.push(u.pathname.replace(/\/apps\/app\/index\.html(?:$|\?.*)/i, '/metadata.json'));
+        // 4) Parent directory fallback: /index.html → ../metadata.json
+        candidates.push(u.pathname.replace(/index\.html(?:$|\?.*)/, '../metadata.json'));
+
+        for (const path of candidates) {
+          try {
+            const metaUrl = new URL(path, window.location.origin).href;
+            const r = await fetch(metaUrl, { cache: 'no-store' });
+            if (!r.ok) continue;
+            const j = await r.json();
+            if (j && typeof j === 'object') return j;
+          } catch (_) { /* try next */ }
+        }
+        return null;
+      }
+      async function applyMetadataForCreation(href){
+        const meta = await tryFetchMetadata(href);
+        if (!meta) return false;
+        const merged = {
+          title: meta.title || '',
+          url: href,
+          description: meta.description || '',
+          iconUrl: meta.iconUrl || '',
+          themeColor: meta.themeColor || (document.getElementById('f-color')?.value || '#FE5000'),
+        };
+        applyDataToForm(merged);
+        try { await generateJsonQr(); } catch (_) {}
+        return true;
+      }
       function updateShareUrl(){
         const data = getFormData();
         const input = document.getElementById('share-url');
@@ -507,12 +558,22 @@
             return;
           } catch (_) { /* fallthrough */ }
         }
-        // 2) Else auto-fill with ball demo URL using current domain
-        const url = resolveBallUrl();
+        // 2) If a creation is already selected or a saved selection exists, do NOT overwrite
+        try {
+          const sel = document.getElementById('creation-select');
+          const hasSelected = !!(sel && sel.value);
+          const saved = localStorage.getItem('lastCreationUrl') || '';
+          if (hasSelected || saved) {
+            // Ensure share URL matches current form state
+            try { updateShareUrl(); } catch (_) {}
+            return;
+          }
+        } catch (_) {}
+        // 3) Else generic defaults
         const data = {
-          title: 'Bouncing Ball',
-          url,
-          description: 'Bounce up! Use scroll wheel to move left and right',
+          title: '',
+          url: '',
+          description: 'Open this creation on your device.',
           iconUrl: '',
           themeColor: '#FE5000'
         };
@@ -596,7 +657,21 @@
               const urlEl = document.getElementById('f-url');
               if (titleEl) titleEl.value = sel.options[chosenIdx].textContent || '';
               if (urlEl) urlEl.value = href;
-              try { await generateJsonQr(); } catch (_) {}
+              // Try metadata; fall back
+              const hadMeta = await applyMetadataForCreation(href);
+              if (!hadMeta) { try { await generateJsonQr(); } catch (_) {} }
+              try { updateShareUrl(); } catch (_) {}
+            } else if (savedIdx > 0) {
+              // Populate form/QR from saved selection without changing iframe if it's already set
+              const href = sel.options[savedIdx].value;
+              const title = sel.options[savedIdx].textContent || '';
+              const titleEl = document.getElementById('f-title');
+              const urlEl = document.getElementById('f-url');
+              if (titleEl) titleEl.value = title;
+              if (urlEl) urlEl.value = href;
+              const hadMeta = await applyMetadataForCreation(href);
+              if (!hadMeta) { try { await generateJsonQr(); } catch (_) {} }
+              try { updateShareUrl(); } catch (_) {}
             }
           }
           sel.addEventListener('change', async () => {
@@ -612,7 +687,10 @@
             const urlEl = document.getElementById('f-url');
             if (titleEl) titleEl.value = sel.selectedOptions[0]?.textContent || '';
             if (urlEl) urlEl.value = sel.value;
-            try { await generateJsonQr(); } catch (_) {}
+            // Try to apply metadata for this creation
+            const hadMeta = await applyMetadataForCreation(sel.value);
+            if (!hadMeta) { try { await generateJsonQr(); } catch (_) {} }
+            try { updateShareUrl(); } catch (_) {}
           });
         } catch (e) {
           const sel = document.getElementById('creation-select');

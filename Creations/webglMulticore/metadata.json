@@ -1,0 +1,6 @@
+{
+  "title": "WebGL Multicore",
+  "description": "WebGL demo using workers for multicore rendering.",
+  "iconUrl": "/icon.jpg",
+  "themeColor": "#FE5000"
+}

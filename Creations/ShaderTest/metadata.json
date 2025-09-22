@@ -1,0 +1,6 @@
+{
+  "title": "Shader Test",
+  "description": "Interactive shader demo. Explore fractals and GPU effects.",
+  "iconUrl": "/icon.jpg",
+  "themeColor": "#FE5000"
+}
