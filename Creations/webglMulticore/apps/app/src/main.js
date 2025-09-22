@@ -284,7 +284,7 @@ function render(timeMs) {
     const fpsSamples = fpsDurationsMs.map(d => 1000 / Math.max(0.0001, d)).sort((a, b) => a - b)
     const idx = Math.max(0, Math.floor(0.01 * n))
     const low1 = fpsSamples[idx]
-    fpsEl.textContent = `fps ${avgFps.toFixed(1)} | 1% ${low1.toFixed(1)} | N ${n}`
+    fpsEl.textContent = `fps ${avgFps.toFixed(1)} | 1% ${low1.toFixed(1)} | cubes ${activeCount} | vsync ${useVsync ? 'on' : 'off'}`
   }
   // Update momentum-based add/remove
   const dt = Math.max(0, Math.min(0.1, frameDtMs * 0.001))
@@ -340,7 +340,7 @@ function render(timeMs) {
   gl.bindVertexArray(vao)
   gl.drawElementsInstanced(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0, Math.max(1, activeCount))
 
-  requestAnimationFrame(render)
+  scheduleNext()
 }
 
 // Ensure canvas has CSS size for clientWidth/clientHeight
@@ -351,7 +351,20 @@ function ensureCanvasCssSize() {
 }
 
 ensureCanvasCssSize()
-requestAnimationFrame(render)
+scheduleNext()
+
+// VSync toggle/scheduler (vsync off by default)
+let useVsync = false
+function scheduleNext() {
+  if (useVsync) {
+    requestAnimationFrame(render)
+  } else {
+    setTimeout(() => render(performance.now()), 0)
+  }
+}
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'v' || e.key === 'V') useVsync = !useVsync
+})
 
 // Optional: react to device side button to toggle rotation direction
 let direction = 1
