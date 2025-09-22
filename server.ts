@@ -114,4 +114,10 @@ serve({
 
 console.log(`Server running on http://localhost:${PORT}`);
 
+// Optional: background watcher to rebuild apps incrementally
+if (process.env.WATCH_BUILDS === '1') {
+  const proc = Bun.spawn({ cmd: ["node", "scripts/watch-builds.mjs"], stdout: "inherit", stderr: "inherit", stdin: "inherit", env: Bun.env });
+  proc.exited.then((code) => console.log(`[watch] exited ${code}`));
+}
+
 

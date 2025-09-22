@@ -147,7 +147,9 @@ async function main() {
       const appDir = dirname(buildPath);
       const { changed, hash, keyPath, distExists } = await shouldBuild(appDir);
       if (!changed && distExists) {
-        console.log(`[apps] Skipping ${appDir} (no changes)`);
+        if (!process.env.BUILDS_QUIET) {
+          console.log(`[apps] Skipping ${appDir} (no changes)`);
+        }
         continue;
       }
       await runBuildScript(buildPath);
