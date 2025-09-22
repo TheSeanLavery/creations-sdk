@@ -12,7 +12,7 @@ export function createWorld() {
     time: 0,
     width: 0,
     height: 0,
-    player: { x: 0, y: 0, alive: true, radius: 1 }, // 1px center hitbox
+    player: { x: 0, y: 0, alive: true, radius: 1, lives: 3, invincibleUntil: 0 }, // 1px center hitbox
     enemies: [],
     playerBullets: [],
     enemyBullets: [],

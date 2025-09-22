@@ -13,6 +13,9 @@ const renderer = createRenderer(canvas)
 
 // World setup
 const world = createWorld()
+// Initial player spawn
+world.player.x = 0
+world.player.y = -world.height + 24
 
 // FPS overlay (rolling 1s window, avg and 1% low)
 const fpsEl = document.createElement('div')
@@ -47,12 +50,38 @@ window.addEventListener('keyup', (e) => {
 let fireHeld = false
 window.addEventListener('keydown', (e) => { if (e.code === 'Space') fireHeld = true })
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') fireHeld = false })
-deviceControls.on('sideButton', () => { fireHeld = !fireHeld })
+// Side button will be used to restart when game over
+let restartRequested = false
+deviceControls.on('sideButton', () => { restartRequested = true })
+
+// Scroll wheel: add horizontal velocity impulse with ramping
+deviceControls.on('scrollWheel', ({ direction }) => {
+  const p = world.player
+  if (!p.alive) return
+  const now = performance.now()
+  const dir = direction === 'up' ? 1 : -1
+  if (dir === lastScrollDir && (now - lastScrollTimeMs) < rampWindowMs) perScrollCount += 1
+  else perScrollCount = 1
+  lastScrollTimeMs = now
+  lastScrollDir = dir
+  hVel += dir * perScrollCount * scrollImpulse
+})
 
 // Spawning
 let enemySpawnTimer = 0
 let enemyFireTimer = 0
 let playerFireTimer = 0
+
+// Horizontal velocity-based movement (scroll impulses + key accel)
+let hVel = 0
+let lastScrollTimeMs = 0
+let lastScrollDir = 0 // +1 up/right, -1 down/left
+let perScrollCount = 1
+const rampWindowMs = 2000
+const decayRate = 3 // s^-1 friction
+const scrollImpulse = 40 // px/s increment per event, ramps
+const keyAccel = 1200 // px/s^2
+const maxKeySpeed = 320 // px/s cap from keys
 
 // Instance buffer assembly
 const MAX_VISIBLE = 16384
@@ -102,18 +131,34 @@ function render(timeMs) {
 
   // Input → player
   const p = world.player
-  const moveSpeed = 180
+  const moveSpeedY = 180
   let mx = 0, my = 0
   if (keys.has('arrowleft') || keys.has('a')) mx -= 1
   if (keys.has('arrowright') || keys.has('d')) mx += 1
   if (keys.has('arrowup') || keys.has('w')) my -= 1
   if (keys.has('arrowdown') || keys.has('s')) my += 1
-  if (mx !== 0 || my !== 0) {
-    const mag = Math.hypot(mx, my) || 1
-    p.x += (mx / mag) * moveSpeed * dt
-    p.y += (my / mag) * moveSpeed * dt
+  // Vertical direct movement
+  if (my !== 0) {
+    const ny = my / Math.abs(my)
+    p.y += ny * moveSpeedY * dt
   }
+  // Horizontal affects velocity with acceleration and clamped max (from keys)
+  if (mx !== 0) {
+    const nx = mx / Math.abs(mx)
+    hVel += nx * keyAccel * dt
+    if (Math.abs(hVel) > maxKeySpeed) hVel = Math.sign(hVel) * maxKeySpeed
+  }
+  // Apply horizontal velocity with exponential decay (friction)
+  const decay = Math.exp(-decayRate * dt)
+  hVel *= decay
+  p.x += hVel * dt
   clampPlayer(world)
+
+  // On first frame after resize ensure bottom spawn
+  if (world.time === 0) {
+    p.x = 0
+    p.y = -world.height + 24 // bottom edge in our coord system (positive y up), bottom is -height
+  }
 
   // Spawning
   enemySpawnTimer -= dt
@@ -124,20 +169,41 @@ function render(timeMs) {
     enemySpawnTimer = 0.75
   }
   enemyFireTimer -= dt
-  if (enemyFireTimer <= 0 && world.enemies.length > 0) {
+  if (enemyFireTimer <= 0 && world.enemies.length > 0 && p.alive) {
     const e = world.enemies[(Math.random() * world.enemies.length) | 0]
     const dx = p.x - e.x, dy = p.y - e.y
     fireEnemyBullet(world, e.x, e.y, dx, dy, 140 + Math.random() * 60)
     enemyFireTimer = 0.6
   }
+  // Auto-shoot player (shoot upward)
   playerFireTimer -= dt
-  if (fireHeld && playerFireTimer <= 0) {
-    firePlayerBullet(world, p.x, p.y - 12, 0, -1, 260)
-    playerFireTimer = 0.1
+  if (p.alive && playerFireTimer <= 0) {
+    firePlayerBullet(world, p.x, p.y + 12, 0, 1, 300)
+    playerFireTimer = 0.09
   }
 
   // Integrate
   updateWorld(world, dt)
+
+  // Game over / restart
+  if (!p.alive && p.lives <= 0) {
+    if (restartRequested) {
+      // Reset world
+      world.time = 0
+      world.enemies.length = 0
+      world.playerBullets.length = 0
+      world.enemyBullets.length = 0
+      p.x = 0
+      p.y = -world.height + 24
+      p.alive = true
+      p.lives = 3
+      p.invincibleUntil = performance.now() + 2000
+      hVel = 0
+      restartRequested = false
+    }
+  } else {
+    restartRequested = false
+  }
 
   // Collisions
   // QuadTree of enemies for player-bullet queries
@@ -175,8 +241,20 @@ function render(timeMs) {
   if (world.player.alive) {
     for (let i = 0; i < world.enemyBullets.length; i++) {
       const b = world.enemyBullets[i]
+      if (performance.now() < p.invincibleUntil) continue
       if (aabbIntersect(world.player.x, world.player.y, 1, 1, b.x, b.y, b.w, b.h)) {
-        world.player.alive = false
+        // lose a life, respawn with invincibility
+        p.lives -= 1
+        if (p.lives > 0) {
+          p.x = 0
+          p.y = -world.height + 24
+          p.invincibleUntil = performance.now() + 2000
+          // clear nearby bullets to avoid instant hit
+          world.enemyBullets = world.enemyBullets.filter(bb => Math.hypot(bb.x - p.x, bb.y - p.y) > 32)
+          hVel = 0
+        } else {
+          p.alive = false
+        }
         break
       }
     }
@@ -185,8 +263,15 @@ function render(timeMs) {
   // Build instances and draw
   flatCount = 0
   renderer.beginFrame()
-  // Player
-  if (world.player.alive) pushInstance(p.x, p.y, 14, 18, 0, 0.2, 0.9, 1.0)
+  // Player (blink while invincible)
+  if (p.alive) {
+    const inv = performance.now() < p.invincibleUntil
+    const blink = inv ? ((Math.floor(performance.now() * 0.01) % 2) === 0) : true
+    if (blink) pushInstance(p.x, p.y, 14, 18, 0, 0.2, 0.9, 1.0)
+  } else {
+    // Game over banner as a large triangle centered
+    // Optional: could render text; keep simple
+  }
   // Enemies
   for (let i = 0; i < world.enemies.length; i++) {
     const e = world.enemies[i]
