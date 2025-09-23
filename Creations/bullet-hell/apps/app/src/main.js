@@ -2,7 +2,7 @@ import deviceControls from './lib/device-controls.js'
 import uiDesign from './lib/ui-design.js'
 import { createRenderer } from './engine/renderer2d.js'
 import { QuadTree } from './engine/quadtree.js'
-import { createWorld, spawnEnemy, firePlayerBullet, fireEnemyBullet, updateWorld, clampPlayer } from './engine/entities.js'
+import { createWorld, spawnEnemy, firePlayerBullet, fireEnemyBullet, updateWorld, clampPlayer, recycleAllEnemyBullets, recycleEnemyBulletsWithinRadius } from './engine/entities.js'
 import config from './config.js'
 
 // Configure viewport for device-like behavior
@@ -236,7 +236,7 @@ function render(timeMs) {
       world.time = 0
       world.enemies.length = 0
       world.playerBullets.length = 0
-      world.enemyBullets.length = 0
+      recycleAllEnemyBullets(world)
       p.x = 0
       p.y = -world.height + (config.world.bottomYOffsetPx || 24)
       p.alive = true
@@ -303,10 +303,11 @@ function render(timeMs) {
           p.y = -world.height + (config.world.bottomYOffsetPx || 24)
           p.invincibleUntil = performance.now() + (config.world.playerInvincibleMs || 2000)
           // clear nearby bullets to avoid instant hit
-          world.enemyBullets = world.enemyBullets.filter(bb => Math.hypot(bb.x - p.x, bb.y - p.y) > 32)
+          recycleEnemyBulletsWithinRadius(world, p.x, p.y, 32)
           hVel = 0
         } else {
           p.alive = false
+          if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(200)
         }
         break
       }

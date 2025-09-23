@@ -7,6 +7,8 @@ export const ENTITY_TYPE = {
   EnemyBullet: 4,
 }
 
+const ENEMY_BULLET_POOL_SIZE = 10000
+
 export function createWorld() {
   return {
     time: 0,
@@ -16,6 +18,13 @@ export function createWorld() {
     enemies: [],
     playerBullets: [],
     enemyBullets: [],
+    enemyBulletPool: (() => {
+      const pool = []
+      for (let i = 0; i < ENEMY_BULLET_POOL_SIZE; i++) {
+        pool.push({ x: 0, y: 0, vx: 0, vy: 0, w: 4, h: 8 })
+      }
+      return pool
+    })(),
   }
 }
 
@@ -30,7 +39,14 @@ export function firePlayerBullet(world, x, y, dx = 0, dy = -1, speed = 240) {
 
 export function fireEnemyBullet(world, x, y, dx = 0, dy = 1, speed = 160) {
   const mag = Math.max(0.0001, Math.hypot(dx, dy))
-  world.enemyBullets.push({ x, y, vx: (dx / mag) * speed, vy: (dy / mag) * speed, w: 4, h: 8 })
+  // Allocate from pool; if none available, drop the bullet
+  const b = world.enemyBulletPool.length > 0 ? world.enemyBulletPool.pop() : null
+  if (!b) return
+  b.x = x; b.y = y
+  b.vx = (dx / mag) * speed
+  b.vy = (dy / mag) * speed
+  // width/height already set in pooled object
+  world.enemyBullets.push(b)
 }
 
 export function updateWorld(world, dt) {
@@ -51,8 +67,11 @@ export function updateWorld(world, dt) {
     b.x += b.vx * dt
     b.y += b.vy * dt
     if (b.x < -world.width || b.x > world.width || b.y < -world.height || b.y > world.height) {
+      // recycle to pool
       world.enemyBullets[i] = world.enemyBullets[world.enemyBullets.length - 1]
-      world.enemyBullets.pop(); i--
+      world.enemyBullets.pop();
+      world.enemyBulletPool.push(b)
+      i--
     }
   }
   // Move enemies
@@ -71,6 +90,31 @@ export function clampPlayer(world, padding = 8) {
   const p = world.player
   p.x = Math.max(-world.width + padding, Math.min(world.width - padding, p.x))
   p.y = Math.max(-world.height + padding, Math.min(world.height - padding, p.y))
+}
+
+// Recycle all enemy bullets back into the pool
+export function recycleAllEnemyBullets(world) {
+  for (let i = 0; i < world.enemyBullets.length; i++) {
+    world.enemyBulletPool.push(world.enemyBullets[i])
+  }
+  world.enemyBullets.length = 0
+}
+
+// Recycle enemy bullets within a radius of (x, y)
+export function recycleEnemyBulletsWithinRadius(world, x, y, radius) {
+  const r2 = radius * radius
+  let write = 0
+  for (let read = 0; read < world.enemyBullets.length; read++) {
+    const b = world.enemyBullets[read]
+    const dx = b.x - x
+    const dy = b.y - y
+    if (dx * dx + dy * dy <= r2) {
+      world.enemyBulletPool.push(b)
+    } else {
+      world.enemyBullets[write++] = b
+    }
+  }
+  world.enemyBullets.length = write
 }
 
 
