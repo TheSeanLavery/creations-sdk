@@ -13,6 +13,26 @@
   </head>
   <body>
     <canvas id="glcanvas"></canvas>
+    <script>
+      // On-device: request real fullscreen on first user gesture
+      (function(){
+        // Do not run inside emulator iframe
+        if (window.top !== window) return;
+        const canvas = document.getElementById('glcanvas');
+        function requestFs(){
+          const el = document.documentElement;
+          const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+          if (req) {
+            try { req.call(el); } catch(_) {}
+          }
+        }
+        function requestFsOnce(e){
+          try { e.preventDefault(); } catch(_) {}
+          requestFs();
+        }
+        canvas.addEventListener('pointerdown', requestFsOnce, { passive: false, once: true });
+      })();
+    </script>
   </body>
   </html>
 

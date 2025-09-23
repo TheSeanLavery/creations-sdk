@@ -1,0 +1,18 @@
+{
+  "name": "r1-cad-creator",
+  "version": "1.0.0",
+  "description": "AI-powered 3D model generation and wireless printing for Rabbit R1",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python -m http.server 8000",
+    "dev-node": "npx serve .",
+    "build": "echo 'No build process needed for static files'",
+    "deploy": "netlify deploy --prod --dir=."
+  },
+  "keywords": ["r1", "3d-printing", "cad", "ai", "rabbit"],
+  "author": "R1 Creation Developer",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}
