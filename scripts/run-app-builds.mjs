@@ -84,6 +84,16 @@ async function gatherAppInputs(appDir) {
     const srcFiles = await listFilesRec(srcDir);
     files.push(...srcFiles);
   }
+  // Also include sources from the creation root (../../src), so apps that keep
+  // their sources at the creation root still trigger rebuilds properly.
+  const creationRoot = join(appDir, '..', '..');
+  const creationSrcDir = join(creationRoot, 'src');
+  if (await pathExists(creationSrcDir)) {
+    const rootSrcFiles = await listFilesRec(creationSrcDir);
+    files.push(...rootSrcFiles);
+  }
+  await maybePush(join(creationRoot, 'package.json'));
+  await maybePush(join(creationRoot, 'package-lock.json'));
   // Deterministic order
   files.sort();
   return files;

@@ -48,9 +48,14 @@
       .stage {
         min-width: 0;
         display: grid;
-        place-items: start center; /* top align, center horizontally within its grid column */
+        place-items: start center; /* default: top align, center horizontally within its grid column */
         position: relative;
         padding-top: 100px; /* original spacing below header */
+      }
+      /* When emulator fullscreen is active, stretch viewport to fill column */
+      .stage.stage-full {
+        padding-top: 0;
+        place-items: stretch center; /* stretch vertically, keep centered horizontally */
       }
       .viewport {
         position: relative;
@@ -63,6 +68,8 @@
         z-index: 200; /* below overlay (300), below input panel (350) */
         margin-left: -50px; /* offset 50px left of column center */
       }
+      /* Fullscreen mode: keep viewport in place; changes are applied to iframe/statusbar only */
+      .viewport.vp-full { }
       .statusbar {
         position: absolute;
         top: 0;
@@ -93,6 +100,10 @@
         background: #000;
         /* native scale */
       }
+      .viewport.vp-full .statusbar { display: none; }
+      .viewport.vp-full iframe { top: 0; left: 0; width: 100%; height: 100%; }
+      /* Briefly hush iframe during native->faux fullscreen flip to avoid flash */
+      .viewport.vp-hushing iframe { opacity: 0; transition: opacity .08s linear; }
       .overlay-img {
         position: fixed;
         width: auto;
@@ -210,13 +221,17 @@
     <header>
       <div class="bar">
         <strong>Host</strong>
-        <span class="url">/ball</span>
+        <span class="url"></span>
         <div style="flex:1"></div>
         <label class="label" for="creation-select">Open creation:</label>
         <select id="creation-select" class="input" style="width: 260px;"></select>
         <div class="row" style="margin-left:12px; align-items:center;">
           <input id="dev-tools-toggle" type="checkbox" />
           <label class="label" for="dev-tools-toggle" style="margin-left:6px;">Dev Tools</label>
+        </div>
+        <div class="row" style="margin-left:12px; align-items:center;">
+          <input id="emu-fullscreen-toggle" type="checkbox" />
+          <label class="label" for="emu-fullscreen-toggle" style="margin-left:6px;">Fullscreen</label>
         </div>
       </div>
     </header>
@@ -356,7 +371,7 @@
             <div class="status-center" id="status-time">00:00</div>
             <div class="status-right" id="status-batt">Batt —</div>
           </div>
-          <iframe src="about:blank" allow="camera; microphone; clipboard-read; clipboard-write; autoplay"></iframe>
+          <iframe src="about:blank" allow="camera; microphone; clipboard-read; clipboard-write; autoplay; fullscreen" allowfullscreen></iframe>
         </div>
         <img id="overlay" class="overlay-img" src="/r1.png" alt="Overlay" />
         <div id="overlay-title" class="overlay-title"></div>
@@ -617,6 +632,7 @@
         const overlayCard = document.getElementById('overlay-card');
         const panelCard = document.getElementById('panel-card');
         const devToggle = document.getElementById('dev-tools-toggle');
+        const fsToggle = document.getElementById('emu-fullscreen-toggle');
         function setDevTools(on){
           if (overlayCard) overlayCard.style.display = on ? '' : 'none';
           if (panelCard) panelCard.style.display = on ? '' : 'none';
@@ -626,6 +642,74 @@
         if (devToggle) devToggle.checked = savedDev;
         setDevTools(!!savedDev);
         devToggle?.addEventListener('change', () => setDevTools(!!devToggle.checked));
+        // Fullscreen container toggle for emulator viewport
+        function setViewportFull(on){
+          try {
+            const vp = document.getElementById('viewport');
+            if (!vp) return;
+            if (on) vp.classList.add('vp-full'); else vp.classList.remove('vp-full');
+            localStorage.setItem('vpFull', on ? '1' : '0');
+            // Re-apply overlay and dependent positions
+            try { applyOverlay(); } catch(_) {}
+            try { positionUnderControls(); } catch(_) {}
+          } catch(_) {}
+        }
+        // Do not auto-enter fullscreen from previous sessions; only if explicitly requested via URL
+        const paramsFs = (() => { try { return new URLSearchParams(window.location.search).get('fullscreen') === '1'; } catch (_) { return false; } })();
+        if (fsToggle) fsToggle.checked = !!paramsFs;
+        setViewportFull(!!paramsFs);
+        fsToggle?.addEventListener('change', () => setViewportFull(!!fsToggle.checked));
+        // Allow ESC to exit emulator fullscreen when header is hidden
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            try { setViewportFull(false); } catch (_) {}
+            try { if (fsToggle) fsToggle.checked = false; } catch (_) {}
+          }
+        });
+
+        // --- Native fullscreen interception to switch to faux fullscreen ---
+        function fsElement(){
+          return document.fullscreenElement
+              || document.webkitFullscreenElement
+              || document.mozFullScreenElement
+              || document.msFullscreenElement
+              || null;
+        }
+        function exitFS(){
+          const p = (document.exitFullscreen?.() ||
+                    document.webkitExitFullscreen?.() ||
+                    document.mozCancelFullScreen?.() ||
+                    document.msExitFullscreen?.());
+          return p && typeof p.then === 'function' ? p : Promise.resolve();
+        }
+        function enterFaux(){
+          try { setViewportFull(true); } catch(_) {}
+          try {
+            const vp = document.getElementById('viewport');
+            if (vp) vp.classList.remove('vp-hushing');
+          } catch(_) {}
+        }
+        function onFSChange(){
+          try {
+            const iframe = document.querySelector('.viewport iframe');
+            const fsel = fsElement();
+            if (fsel === iframe) {
+              // Briefly hush to avoid native FS flash
+              const vp = document.getElementById('viewport');
+              if (vp) vp.classList.add('vp-hushing');
+              Promise.resolve(exitFS()).finally(enterFaux);
+            }
+            // If exited native FS while hushing, ensure faux is applied
+            if (!fsel) {
+              const vp = document.getElementById('viewport');
+              if (vp && vp.classList.contains('vp-hushing')) {
+                enterFaux();
+              }
+            }
+          } catch(_) {}
+        }
+        ;['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange']
+          .forEach(ev => document.addEventListener(ev, onFSChange, false));
         // Populate creations dropdown
         try {
           // Prefer static file pre-generated by build script to avoid API routing issues
@@ -678,7 +762,18 @@
             const shouldAutoSelect = !currentSrc || currentSrc === 'about:blank' || currentSrc.endsWith('/ball/index.html');
             if (shouldAutoSelect && sel.options.length > 1) {
               let chosenIdx = 1;
-              if (savedIdx > 0) chosenIdx = savedIdx;
+              if (savedIdx > 0) {
+                chosenIdx = savedIdx;
+              } else {
+                // Prefer r1-tv as default if present
+                const prefer = Array.from(sel.options).findIndex((opt, i) => {
+                  if (i === 0) return false;
+                  const text = (opt.textContent || '').toLowerCase();
+                  if (text === 'r1-tv') return true;
+                  try { return new URL(opt.value).pathname.includes('/creations/r1-tv/'); } catch (_) { return false; }
+                });
+                if (prefer > 0) chosenIdx = prefer;
+              }
               sel.selectedIndex = chosenIdx;
               const href = sel.options[chosenIdx].value;
               frame.src = href;
@@ -688,6 +783,8 @@
               const urlEl = document.getElementById('f-url');
               if (titleEl) titleEl.value = sel.options[chosenIdx].textContent || '';
               if (urlEl) urlEl.value = href;
+              // Update header URL label
+              try { const hdr = document.querySelector('.url'); if (hdr) hdr.textContent = new URL(href).pathname; } catch (_) { try { const hdr = document.querySelector('.url'); if (hdr) hdr.textContent = href; } catch (_) {} }
               // Try metadata; fall back
               const hadMeta = await applyMetadataForCreation(href);
               if (!hadMeta) { try { await generateJsonQr(); } catch (_) {} }
@@ -700,6 +797,8 @@
               const urlEl = document.getElementById('f-url');
               if (titleEl) titleEl.value = title;
               if (urlEl) urlEl.value = href;
+              // Update header URL label
+              try { const hdr = document.querySelector('.url'); if (hdr) hdr.textContent = new URL(href).pathname; } catch (_) { try { const hdr = document.querySelector('.url'); if (hdr) hdr.textContent = href; } catch (_) {} }
               const hadMeta = await applyMetadataForCreation(href);
               if (!hadMeta) { try { await generateJsonQr(); } catch (_) {} }
               try { updateShareUrl(); } catch (_) {}
@@ -711,6 +810,8 @@
             if (frame) {
               frame.src = sel.value; // absolute URL
             }
+            // Update header URL label
+            try { const hdr = document.querySelector('.url'); if (hdr) hdr.textContent = new URL(sel.value).pathname; } catch (_) { try { const hdr = document.querySelector('.url'); if (hdr) hdr.textContent = sel.value; } catch (_) {} }
             // Persist selection
             try { localStorage.setItem('lastCreationUrl', sel.value); } catch (_) {}
             // Update QR form to match selected creation
@@ -758,9 +859,9 @@
           const x = parseInt(sx.value, 10);
           const y = parseInt(sy.value, 10);
           const s = parseFloat(ss.value);
-          // Position overlay relative to the iframe (viewport) in page coordinates
+          // Anchor overlay to the viewport origin so it does not shift when status bar hides
           const pageLeft = rect.left + x;
-          const pageTop = rect.top + (y - STATUSBAR_HEIGHT);
+          const pageTop = rect.top + y;
           overlay.style.left = `${pageLeft}px`;
           overlay.style.top = `${pageTop}px`;
           overlay.style.transform = `scale(${s})`;
@@ -769,7 +870,7 @@
           const titleEl = document.getElementById('overlay-title');
           if (titleEl) {
             const titleLeft = rect.left + x + 12; // small inset from left of overlay
-            const titleTop = rect.top + (y - STATUSBAR_HEIGHT) - 18; // tiny extra margin below title
+            const titleTop = rect.top + y - 18; // tiny extra margin above content
             titleEl.style.left = `${titleLeft}px`;
             titleEl.style.top = `${titleTop}px`;
           }
@@ -782,13 +883,36 @@
             const ph = parseInt(document.getElementById('panel-h')?.value || '254', 10);
             // Anchor panel to the iframe's right edge in page coordinates; do not clamp to stage
             const pLeft = rect.right + px;
-            const pTop = rect.top + STATUSBAR_HEIGHT + py;
+            const pTop = rect.top + py;
             panel.style.left = `${pLeft}px`;
             panel.style.top = `${pTop}px`;
             panel.style.transform = '';
             panel.style.width = `${pw}px`;
             panel.style.height = `${ph}px`;
           }
+          // If viewport is in fullscreen emulator mode, scale and center the iframe content
+          try {
+            const frame = vp.querySelector('iframe');
+            const isFull = vp.classList.contains('vp-full');
+            if (frame) {
+              if (isFull) {
+                frame.style.width = '100%';
+                frame.style.height = '100%';
+                frame.style.left = '0px';
+                frame.style.top = '0px';
+                frame.style.transform = '';
+                frame.style.transformOrigin = '';
+              } else {
+                // Native scale placement
+                frame.style.width = '240px';
+                frame.style.height = '254px';
+                frame.style.left = '0px';
+                frame.style.top = `${STATUSBAR_HEIGHT}px`;
+                frame.style.transform = '';
+                frame.style.transformOrigin = '';
+              }
+            }
+          } catch (_) {}
           // sync numeric inputs
           sxNum.value = x;
           syNum.value = y;
@@ -812,7 +936,7 @@
         } catch (_) { /* ignore if not supported */ }
         // Set requested defaults
         sx.value = '-33';
-        sy.value = '-17';
+        sy.value = '-42';
         ss.value = '0.49';
         applyOverlay();
         try { positionUnderControls(); } catch (_) {}
