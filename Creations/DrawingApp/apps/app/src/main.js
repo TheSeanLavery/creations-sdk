@@ -12,6 +12,12 @@ const canvas = document.createElement('canvas')
 const ctx = canvas.getContext('2d')
 pad?.appendChild(canvas)
 
+// HUD to show fingertip size (CSS px)
+const hud = document.createElement('div')
+hud.id = 'hud'
+hud.textContent = ''
+pad?.appendChild(hud)
+
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1
   const w = pad?.clientWidth || window.innerWidth
@@ -40,13 +46,39 @@ function getRelativePos(clientX, clientY) {
   return { x: clientX - rect.left, y: clientY - rect.top }
 }
 
-function beginStroke(x, y, pressure = 0.5, width = 4, height = 4) {
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function computeTipSize(width, height) {
+  const w = width || 0
+  const h = height || 0
+  return Math.max(w, h)
+}
+
+function computeLineWidthFromTip(size) {
+  // Map tip diameter in CSS px to stroke width
+  // Tweakable: feel free to adjust the scale and limits
+  return clamp(2 + size * 0.2, 2, 24)
+}
+
+function updateHudTip(size) {
+  if (!hud) return
+  if (size && size > 0) {
+    hud.textContent = size.toFixed(1)
+    hud.style.display = 'block'
+  } else {
+    hud.textContent = ''
+    hud.style.display = 'none'
+  }
+}
+
+function beginStroke(x, y, width = 4, height = 4) {
   isDrawing = true
   lastX = x
   lastY = y
-  // pressure-based width scaling (optional)
-  const base = 2 + pressure * 6
-  ctx.lineWidth = Math.max(base, Math.max(width, height) * 0.2)
+  const tip = computeTipSize(width, height)
+  ctx.lineWidth = computeLineWidthFromTip(tip)
 }
 
 function drawStroke(x, y) {
@@ -61,6 +93,7 @@ function drawStroke(x, y) {
 
 function endStroke() {
   isDrawing = false
+  updateHudTip(0)
 }
 
 // Logging utility from prompt
@@ -97,20 +130,31 @@ function show(e, note = '') {
 
 // Pointer events (preferred)
 pad?.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'touch' || e.pointerType === 'pen' || e.pointerType === 'mouse') {
+  if (e.pointerType === 'touch') {
     const { x, y } = getRelativePos(e.clientX, e.clientY)
-    beginStroke(x, y, e.pressure ?? 0.5, e.width ?? 4, e.height ?? 4)
+    beginStroke(x, y, e.width ?? 4, e.height ?? 4)
+    const tip = computeTipSize(e.width, e.height)
+    updateHudTip(tip)
     drawStroke(x, y)
     pad.setPointerCapture?.(e.pointerId)
     show(e, 'pointerdown')
+  } else if (e.pointerType === 'mouse') {
+    const { x, y } = getRelativePos(e.clientX, e.clientY)
+    beginStroke(x, y)
+    drawStroke(x, y)
   }
 })
 
 pad?.addEventListener('pointermove', (e) => {
   if (!isDrawing) return
   const { x, y } = getRelativePos(e.clientX, e.clientY)
+  if (e.pointerType === 'touch') {
+    const tip = computeTipSize(e.width, e.height)
+    ctx.lineWidth = computeLineWidthFromTip(tip)
+    updateHudTip(tip)
+    show(e, 'pointermove')
+  }
   drawStroke(x, y)
-  show(e, 'pointermove')
 })
 
 pad?.addEventListener('pointerup', () => endStroke())
@@ -122,7 +166,11 @@ pad?.addEventListener('touchstart', (e) => {
   const t = e.touches[0]
   if (!t) return
   const { x, y } = getRelativePos(t.clientX, t.clientY)
-  beginStroke(x, y, t.force ?? 0.5, (t.radiusX ?? 2) * 2, (t.radiusY ?? 2) * 2)
+  const rx = t.radiusX ?? t.webkitRadiusX ?? 2
+  const ry = t.radiusY ?? t.webkitRadiusY ?? 2
+  const tip = computeTipSize(rx * 2, ry * 2)
+  beginStroke(x, y, rx * 2, ry * 2)
+  updateHudTip(tip)
   drawStroke(x, y)
   show(e, 'touchstart')
 }, { passive: true })
@@ -131,6 +179,11 @@ pad?.addEventListener('touchmove', (e) => {
   const t = e.touches[0]
   if (!t) return
   const { x, y } = getRelativePos(t.clientX, t.clientY)
+  const rx = t.radiusX ?? t.webkitRadiusX ?? 2
+  const ry = t.radiusY ?? t.webkitRadiusY ?? 2
+  const tip = computeTipSize(rx * 2, ry * 2)
+  ctx.lineWidth = computeLineWidthFromTip(tip)
+  updateHudTip(tip)
   drawStroke(x, y)
   show(e, 'touchmove')
 }, { passive: true })

@@ -62,3 +62,18 @@ button {
     display: block;
 }
 
+#hud {
+    position: fixed;
+    right: 2vw;
+    top: 2vw;
+    background: rgba(0,0,0,0.6);
+    color: #FE5F00;
+    border: 1px solid #FE5F00;
+    border-radius: 2vw;
+    padding: 1.5vw 2vw;
+    font-size: 4vw;
+    z-index: 10;
+    min-width: 12vw;
+    text-align: center;
+}
+
