@@ -111,15 +111,25 @@ const scrollImpulse = config.player.scrollImpulse // px/s increment per event, r
 const keyAccel = config.player.keyAccel // px/s^2
 const maxKeySpeed = config.player.maxKeySpeed // px/s cap from keys
 
-// Instance buffer assembly
-const MAX_VISIBLE = 16384
+// Instance buffer assembly (CPU-side, grows dynamically)
 const floatsPerInstance = renderer.floatsPerInstance
-let flat = new Float32Array(MAX_VISIBLE * floatsPerInstance)
+let flatCapacity = 16384
+let flat = new Float32Array(flatCapacity * floatsPerInstance)
 let flatCount = 0
 
+function ensureFlatCapacity(minInstances) {
+  if (minInstances <= flatCapacity) return
+  let next = flatCapacity
+  while (next < minInstances) next *= 2
+  const newFlat = new Float32Array(next * floatsPerInstance)
+  newFlat.set(flat.subarray(0, flatCount * floatsPerInstance))
+  flat = newFlat
+  flatCapacity = next
+}
+
 function pushInstance(x, y, sx, sy, rot, r, g, b) {
+  if (flatCount + 1 > flatCapacity) ensureFlatCapacity(flatCount + 1)
   const i = flatCount * floatsPerInstance
-  if (i + floatsPerInstance > flat.length) return
   flat[i] = x; flat[i + 1] = y
   flat[i + 2] = sx; flat[i + 3] = sy
   flat[i + 4] = rot
@@ -197,18 +207,28 @@ function render(timeMs) {
     // Spawn at the top edge and move downward (negative vy) with config speed range
     const spd = -(config.enemy.speedMin + Math.random() * (config.enemy.speedMax - config.enemy.speedMin))
     spawnEnemy(world, ex, world.height - 20, spd)
+    // Initialize per-enemy fire schedule with a random offset
+    const e = world.enemies[world.enemies.length - 1]
+    if (e) e.nextFireAt = world.time + Math.random() * config.enemy.fireInterval
     // Dynamic interval: base minus elapsed*accel, clamped
     const base = config.enemy.spawn.baseInterval
     const dec = (config.enemy.spawn.accelPerSec || 0) * world.time
     enemySpawnTimer = Math.max(config.enemy.spawn.minInterval, base - dec)
   }
-  enemyFireTimer -= dt
-  if (enemyFireTimer <= 0 && world.enemies.length > 0 && p.alive) {
-    const e = world.enemies[(Math.random() * world.enemies.length) | 0]
-    const dx = p.x - e.x, dy = p.y - e.y
-    const bs = config.enemy.bulletSpeedMin + Math.random() * (config.enemy.bulletSpeedMax - config.enemy.bulletSpeedMin)
-    fireEnemyBullet(world, e.x, e.y, dx, dy, bs)
-    enemyFireTimer = config.enemy.fireInterval
+  // Per-enemy firing instead of single global timer
+  if (p.alive) {
+    for (let i = 0; i < world.enemies.length; i++) {
+      const e = world.enemies[i]
+      if (e.nextFireAt == null) {
+        e.nextFireAt = world.time + Math.random() * config.enemy.fireInterval
+      }
+      if (world.time >= e.nextFireAt) {
+        const dx = p.x - e.x, dy = p.y - e.y
+        const bs = config.enemy.bulletSpeedMin + Math.random() * (config.enemy.bulletSpeedMax - config.enemy.bulletSpeedMin)
+        fireEnemyBullet(world, e.x, e.y, dx, dy, bs)
+        e.nextFireAt = world.time + config.enemy.fireInterval
+      }
+    }
   }
   // Auto-shoot player (shoot upward) with spread
   playerFireTimer -= dt
