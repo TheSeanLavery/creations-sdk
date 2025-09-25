@@ -12,9 +12,10 @@ const ctx = canvas.getContext('2d')
 // Game constants
 const BLOCK_HEIGHT = 24
 const MARGIN = 12
-const BASE_WIDTH_FRAC = 0.6 // base block is 60% of play width
-const INITIAL_SPEED = 120 // px/s
-const SPEED_INCREMENT = 18 // per level
+const BASE_WIDTH_FRAC = 0.75 // base block is 75% of play width
+const INITIAL_SPEED = 200 // px/s
+const SPEED_INCREMENT = 25 // per level
+const SPEED_PER_BLOCK = 2 // px/s increase per successful placement
 
 // Game state
 let level = 1
@@ -26,6 +27,14 @@ let topThreshold = 0
 let gameOver = false
 let score = 0
 let highScore = Number.parseInt(localStorage.getItem('stackerHighScore') || '0', 10) || 0
+
+// Level flash overlay
+let levelFlashUntilMs = 0
+let levelFlashText = ''
+function flashLevel(text, durationMs = 1000) {
+  levelFlashText = text
+  levelFlashUntilMs = performance.now() + durationMs
+}
 
 /**
  * Placed blocks, from bottom to top.
@@ -118,8 +127,12 @@ function startLevel(newLevel, keepSpeed) {
 }
 
 function nextLevel() {
-  startLevel(level + 1, false)
+  // Reset speed to current speed plus level increment
+  const nextSpeed = speedPxPerSec + SPEED_INCREMENT
+  startLevel(level + 1, true)
+  speedPxPerSec = nextSpeed
   sfxLevelUp()
+  flashLevel(`Level ${level}`, 1000)
 }
 
 function restartGame() {
@@ -128,6 +141,7 @@ function restartGame() {
   speedPxPerSec = INITIAL_SPEED
   startLevel(1, true)
   gameOver = false
+  flashLevel(`Level ${level}`, 1000)
 }
 
 function placeBlock() {
@@ -152,6 +166,12 @@ function placeBlock() {
   stack.push(newBlock)
   // Score +1 per successful placement
   score += 1
+  if (score > highScore) {
+    highScore = score
+    try { localStorage.setItem('stackerHighScore', String(highScore)) } catch (e) {}
+  }
+  // Increase speed slightly per block
+  speedPxPerSec += SPEED_PER_BLOCK
   const wasTrimmed = newBlock.width < moving.width
   if (wasTrimmed) {
     sfxTrim()
@@ -162,9 +182,8 @@ function placeBlock() {
   moving.width = newBlock.width
   moving.x = Math.max(playLeft, Math.min(newBlock.x, playRight - moving.width))
   moving.y -= BLOCK_HEIGHT
-  // Reached the top? Advance to next level with slightly faster speed
+  // Reached the top? Advance to next level with adjusted speed
   if (moving.y <= topThreshold) {
-    speedPxPerSec += SPEED_INCREMENT
     nextLevel()
   }
 }
@@ -204,6 +223,18 @@ function drawHud() {
   ctx.font = `${Math.max(9, Math.floor(canvas.height * 0.03))}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`
   ctx.fillStyle = 'rgba(200,200,200,0.9)'
   ctx.fillText(`Best ${highScore}`, MARGIN, MARGIN + Math.max(12, Math.floor(canvas.height * 0.05)))
+}
+
+function drawLevelFlash(nowMs) {
+  if (nowMs <= levelFlashUntilMs && levelFlashText) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = '#fff'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = `${Math.max(14, Math.floor(canvas.height * 0.07))}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`
+    ctx.fillText(levelFlashText, canvas.width / 2, canvas.height * 0.45)
+  }
 }
 
 function drawGameOver() {
@@ -251,11 +282,13 @@ function tick(ts) {
   // Draw moving block
   if (moving) drawBlock(moving, '#ff7043')
   drawHud()
+  drawLevelFlash(ts)
   if (gameOver) drawGameOver()
   requestAnimationFrame(tick)
 }
 
 // Start
 startLevel(1, false)
+flashLevel(`Level ${level}`, 1000)
 requestAnimationFrame(tick)
 
