@@ -1,6 +1,10 @@
 {
   "items": [
     {
+      "label": "aiCAD",
+      "url": "/creations/aiCAD/index.html"
+    },
+    {
       "label": "bouncing_ball_game",
       "url": "/creations/bouncing_ball_game/index.html"
     },
@@ -23,6 +27,10 @@
     {
       "label": "ShaderTest",
       "url": "/creations/ShaderTest/index.html"
+    },
+    {
+      "label": "StackerGame",
+      "url": "/creations/StackerGame/index.html"
     },
     {
       "label": "template",
