@@ -57,9 +57,14 @@ function computeTipSize(width, height) {
 }
 
 function computeLineWidthFromTip(size) {
-  // Map tip diameter in CSS px to stroke width
-  // Tweakable: feel free to adjust the scale and limits
-  return clamp(2 + size * 0.2, 2, 24)
+  // Non-linear power mapping:
+  // f(0.5) = 1px, f(10) = 50px
+  // Solve a*s^k with two constraints => k = log(50)/log(20), a = 2^k
+  const s = clamp(size, 0.5, 10)
+  const k = Math.log(50) / Math.log(20)
+  const a = Math.pow(2, k)
+  const width = a * Math.pow(s, k)
+  return clamp(width, 1, 50)
 }
 
 function updateHudTip(size) {
