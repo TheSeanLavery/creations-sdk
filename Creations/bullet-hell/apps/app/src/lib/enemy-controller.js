@@ -100,11 +100,15 @@ export class EnemyController {
       // If phases use untilHpRatio, select first that matches
       const hasHpPhases = phases.some(p => p.untilHpRatio != null)
       if (hasHpPhases) {
+        // Interpret untilHpRatio as end boundary for the current phase, advancing as HP falls
+        let idx = 0
         for (let i = 0; i < phases.length; i++) {
-          const p = phases[i]
-          if (p.untilHpRatio != null && hpRatio > p.untilHpRatio) { this.firePhaseIdx = i; break }
-          if (p.untilHpRatio != null && hpRatio <= p.untilHpRatio) { this.firePhaseIdx = i; break }
+          const ph = phases[i]
+          if (ph.untilHpRatio != null && hpRatio <= ph.untilHpRatio) {
+            idx = Math.min(i + 1, phases.length - 1)
+          }
         }
+        this.firePhaseIdx = idx
       } else {
         // duration-based cycle
         this.firePhaseTime += dt
