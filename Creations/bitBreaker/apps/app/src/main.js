@@ -48,69 +48,103 @@ precision highp float;
 layout(location=0) in vec2 a_pos;       // unit quad verts [-0.5,0.5]
 layout(location=1) in vec2 a_instPos;   // world center
 layout(location=2) in vec2 a_instSize;  // world size
-layout(location=3) in vec4 a_color;
+layout(location=3) in vec4 a_color;     // base color
+layout(location=4) in vec2 a_params;    // x: seed, y: damage [0,1]
 uniform vec2 u_worldSize;
 out vec4 v_color;
+out vec2 v_uv;        // local 0..1
+out vec2 v_params;    // seed, damage
 void main(){
   vec2 world = a_instPos + a_pos * a_instSize;
   vec2 ndc = (world / u_worldSize) * 2.0 - 1.0;
   ndc.y = -ndc.y; // flip Y to screen coords
   gl_Position = vec4(ndc, 0.0, 1.0);
   v_color = a_color;
+  v_uv = a_pos * 0.5 + 0.5;
+  v_params = a_params;
 }`
 
 const fs2d = `#version 300 es
 precision highp float;
 in vec4 v_color;
+in vec2 v_uv;
+in vec2 v_params; // seed, damage
 out vec4 outColor;
-void main(){ outColor = v_color; }`
+
+// Hash helpers
+float hash11(float p) {
+  p = fract(p * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
+}
+vec2 hash21(float p) {
+  float n = hash11(p);
+  return vec2(hash11(n + 1.2345), hash11(n + 6.5432));
+}
+
+// Simple Voronoi crack mask using F2-F1 metric
+float crackMask(vec2 uv, float seed, float damage) {
+  // cell count scales with damage (more cracks over time)
+  float cells = mix(6.0, 18.0, clamp(damage, 0.0, 1.0));
+  vec2 p = uv * cells;
+  vec2 pi = floor(p);
+  vec2 pf = fract(p);
+  float f1 = 1e9, f2 = 1e9;
+  for (int j=-1;j<=1;j++){
+    for (int i=-1;i<=1;i++){
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = hash21(dot(pi+g, vec2(127.1,311.7))+seed*91.7) - 0.5;
+      vec2 d = g + o + 0.5 - pf;
+      float dist = dot(d,d);
+      if (dist < f1) { f2 = f1; f1 = dist; }
+      else if (dist < f2) { f2 = dist; }
+    }
+  }
+  float edge = abs(f2 - f1);
+  float thickness = mix(0.01, 0.08, damage);
+  float m = smoothstep(thickness, thickness*0.5, edge);
+  return m;
+}
+
+void main(){
+  float seed = v_params.x;
+  float damage = clamp(v_params.y, 0.0, 1.0);
+  float cracks = crackMask(clamp(v_uv, 0.0, 1.0), seed, damage);
+  vec3 base = v_color.rgb;
+  vec3 crackCol = vec3(0.02,0.02,0.02);
+  vec3 col = mix(base, crackCol, cracks);
+  outColor = vec4(col, 1.0);
+}`
 
 const program = createProgram(gl, vs2d, fs2d)
 gl.useProgram(program)
 
-// Simple bloom: render to offscreen color then bright-pass + blur (MVP: one-pass naive blur)
+// Bloom pipeline: scene -> offColor, horizontal bright blur -> offBlurTex, vertical blur + composite to screen
 const offColor = gl.createTexture()
 const offFbo = gl.createFramebuffer()
+const offBlurTex = gl.createTexture()
+const offBlurFbo = gl.createFramebuffer()
 let offW = 0, offH = 0
-function ensureOffscreen() {
-  if (offW === canvas.width && offH === canvas.height) return
-  offW = canvas.width; offH = canvas.height
-  gl.bindTexture(gl.TEXTURE_2D, offColor)
+function configureTexture(tex, w, h) {
+  gl.bindTexture(gl.TEXTURE_2D, tex)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, offW, offH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+}
+function ensureOffscreen() {
+  if (offW === canvas.width && offH === canvas.height) return
+  offW = canvas.width; offH = canvas.height
+  configureTexture(offColor, offW, offH)
   gl.bindFramebuffer(gl.FRAMEBUFFER, offFbo)
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, offColor, 0)
+  configureTexture(offBlurTex, offW, offH)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, offBlurFbo)
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, offBlurTex, 0)
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
-
-// Post FS for bright pass (threshold) and naive blur combine
-const fsPost = `#version 300 es
-precision highp float;
-out vec4 outColor;
-in vec2 v_uv;
-uniform sampler2D u_tex;
-uniform float u_threshold;
-uniform float u_bloom;
-void main(){
-  vec2 texel = 1.0 / vec2(textureSize(u_tex, 0));
-  vec3 c = texture(u_tex, v_uv).rgb;
-  vec3 sum = vec3(0.0);
-  // 9-tap blur around
-  for (int dy = -1; dy <= 1; ++dy) {
-    for (int dx = -1; dx <= 1; ++dx) {
-      vec2 uv = v_uv + vec2(float(dx), float(dy)) * texel * 1.5;
-      vec3 s = texture(u_tex, uv).rgb;
-      float b = max(0.0, max(max(s.r, s.g), s.b) - u_threshold);
-      sum += s * b;
-    }
-  }
-  sum /= 9.0;
-  vec3 outc = c + sum * u_bloom;
-  outColor = vec4(outc, 1.0);
-}`
 
 const vsPost = `#version 300 es
 precision highp float;
@@ -121,10 +155,56 @@ void main(){
   gl_Position = vec4(a_pos, 0.0, 1.0);
 }`
 
-const postProg = createProgram(gl, vsPost, fsPost)
-const postUThresh = gl.getUniformLocation(postProg, 'u_threshold')
-const postUBloom = gl.getUniformLocation(postProg, 'u_bloom')
-const postUTex = gl.getUniformLocation(postProg, 'u_tex')
+// Horizontal/vertical blur with optional bright threshold
+const fsBlur = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 outColor;
+uniform sampler2D u_tex;
+uniform vec2 u_dir;       // (1,0) or (0,1)
+uniform float u_threshold; // >=0 to apply bright-pass; <0 to skip
+void main(){
+  vec2 texel = 1.0 / vec2(textureSize(u_tex, 0));
+  float w[9];
+  w[0]=0.05; w[1]=0.07; w[2]=0.1; w[3]=0.13; w[4]=0.2; w[5]=0.13; w[6]=0.1; w[7]=0.07; w[8]=0.05;
+  vec3 sum = vec3(0.0);
+  int k = 0;
+  for (int i=-4;i<=4;i++){
+    vec2 uv = v_uv + float(i) * texel * u_dir * 2.0; // widen radius
+    vec3 s = texture(u_tex, uv).rgb;
+    if (u_threshold >= 0.0) {
+      float b = max(0.0, max(max(s.r, s.g), s.b) - u_threshold);
+      s *= b;
+    }
+    sum += s * w[k++];
+  }
+  outColor = vec4(sum, 1.0);
+}`
+
+// Composite blurred brightness with original scene
+const fsComposite = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 outColor;
+uniform sampler2D u_scene;
+uniform sampler2D u_blur;
+uniform float u_bloom;
+void main(){
+  vec3 scene = texture(u_scene, v_uv).rgb;
+  vec3 blur = texture(u_blur, v_uv).rgb;
+  outColor = vec4(scene + blur * u_bloom, 1.0);
+}`
+
+const blurProg = createProgram(gl, vsPost, fsBlur)
+const blurUTex = gl.getUniformLocation(blurProg, 'u_tex')
+const blurUDir = gl.getUniformLocation(blurProg, 'u_dir')
+const blurUThresh = gl.getUniformLocation(blurProg, 'u_threshold')
+
+const compProg = createProgram(gl, vsPost, fsComposite)
+const compUScene = gl.getUniformLocation(compProg, 'u_scene')
+const compUBlur = gl.getUniformLocation(compProg, 'u_blur')
+const compUBloom = gl.getUniformLocation(compProg, 'u_bloom')
+
 const postVao = gl.createVertexArray()
 gl.bindVertexArray(postVao)
 const postQuad = new Float32Array([
@@ -160,6 +240,7 @@ gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
 const instPosBuf = gl.createBuffer()
 const instSizeBuf = gl.createBuffer()
 const instColorBuf = gl.createBuffer()
+const instParamBuf = gl.createBuffer()
 
 gl.bindBuffer(gl.ARRAY_BUFFER, instPosBuf)
 gl.enableVertexAttribArray(1)
@@ -175,6 +256,11 @@ gl.bindBuffer(gl.ARRAY_BUFFER, instColorBuf)
 gl.enableVertexAttribArray(3)
 gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 0, 0)
 gl.vertexAttribDivisor(3, 1)
+
+gl.bindBuffer(gl.ARRAY_BUFFER, instParamBuf)
+gl.enableVertexAttribArray(4)
+gl.vertexAttribPointer(4, 2, gl.FLOAT, false, 0, 0)
+gl.vertexAttribDivisor(4, 1)
 
 const uWorldSize = gl.getUniformLocation(program, 'u_worldSize')
 
@@ -578,23 +664,28 @@ function step(dt) {
 const posData = []
 const sizeData = []
 const colorData = []
+const paramData = []
 
-function pushInstance(x, y, w, h, r, g, b, a) {
+function pushInstance(x, y, w, h, r, g, b, a, seed = 0, damage = 0) {
   posData.push(x, y)
   sizeData.push(w, h)
   colorData.push(r, g, b, a)
+  paramData.push(seed, damage)
 }
 
 function drawInstances() {
   const pos = new Float32Array(posData)
   const size = new Float32Array(sizeData)
   const col = new Float32Array(colorData)
+  const par = new Float32Array(paramData)
   gl.bindBuffer(gl.ARRAY_BUFFER, instPosBuf)
   gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW)
   gl.bindBuffer(gl.ARRAY_BUFFER, instSizeBuf)
   gl.bufferData(gl.ARRAY_BUFFER, size, gl.DYNAMIC_DRAW)
   gl.bindBuffer(gl.ARRAY_BUFFER, instColorBuf)
   gl.bufferData(gl.ARRAY_BUFFER, col, gl.DYNAMIC_DRAW)
+  gl.bindBuffer(gl.ARRAY_BUFFER, instParamBuf)
+  gl.bufferData(gl.ARRAY_BUFFER, par, gl.DYNAMIC_DRAW)
   gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, pos.length / 2)
 }
 
@@ -686,7 +777,8 @@ function render(now) {
     const br = bricks[i]
     if (!br.alive) continue
     const hpColor = br.hp === 1 ? levelPalette.brick1 : br.hp === 2 ? levelPalette.brick2 : levelPalette.brick3
-    pushInstance(br.x, br.y, br.w, br.h, hpColor[0], hpColor[1], hpColor[2], 1.0)
+    const damage = 1.0 - Math.max(0.0, Math.min(1.0, br.hp / 3.0))
+    pushInstance(br.x, br.y, br.w, br.h, hpColor[0], hpColor[1], hpColor[2], 1.0, (i * 13.37) % 1000, damage)
   }
 
   // Paddle
@@ -705,16 +797,28 @@ function render(now) {
   }
 
   drawInstances()
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-
-  // Post-process (bloom)
-  gl.useProgram(postProg)
+  // Horizontal blur with bright-pass
+  gl.bindFramebuffer(gl.FRAMEBUFFER, offBlurFbo)
+  gl.useProgram(blurProg)
   gl.bindVertexArray(postVao)
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, offColor)
-  gl.uniform1i(postUTex, 0)
-  gl.uniform1f(postUThresh, 0.5)
-  gl.uniform1f(postUBloom, 1.1)
+  gl.uniform1i(blurUTex, 0)
+  gl.uniform2f(blurUDir, 1, 0)
+  gl.uniform1f(blurUThresh, 0.3)
+  gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+  // Vertical blur
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  gl.useProgram(compProg)
+  gl.bindVertexArray(postVao)
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, offColor)
+  gl.uniform1i(compUScene, 0)
+  gl.activeTexture(gl.TEXTURE1)
+  gl.bindTexture(gl.TEXTURE_2D, offBlurTex)
+  gl.uniform1i(compUBlur, 1)
+  gl.uniform1f(compUBloom, 4.0)
   gl.drawArrays(gl.TRIANGLES, 0, 6)
 
   // HUD
