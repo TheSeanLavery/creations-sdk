@@ -1,6 +1,6 @@
 const config = {
   world: {
-    playerLives: 3,
+    playerLives: 9999,
     playerInvincibleMs: 4000,
     bottomYOffsetPx: 24,
   },
