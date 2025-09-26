@@ -34,9 +34,17 @@ export function spawnEnemy(world, x, y, speed = 40) {
   world.enemies.push({ x, y, vx: 0, vy: speed, w: 16, h: 16, hp: 3 })
 }
 
-export function firePlayerBullet(world, x, y, dx = 0, dy = -1, speed = 240) {
+export function firePlayerBullet(world, x, y, dx = 0, dy = -1, speed = 240, extra) {
   const mag = Math.max(0.0001, Math.hypot(dx, dy))
-  world.playerBullets.push({ x, y, vx: (dx / mag) * speed, vy: (dy / mag) * speed, w: 4, h: 8 })
+  const b = { x, y, vx: (dx / mag) * speed, vy: (dy / mag) * speed, w: 4, h: 8 }
+  // Optional sine modulation for player bullets
+  if (extra) {
+    b.birthTime = world.time || 0
+    b.sineAmp = extra.sineAmp || 0
+    b.sineFreqHz = extra.sineFreqHz || 0
+    b.sinePrevOffset = 0
+  }
+  world.playerBullets.push(b)
 }
 
 export function fireEnemyBullet(world, x, y, dx = 0, dy = 1, speed = 160, extra) {
@@ -64,6 +72,18 @@ export function updateWorld(world, dt) {
   // Move player bullets
   for (let i = 0; i < world.playerBullets.length; i++) {
     const b = world.playerBullets[i]
+    // Apply optional sine modulation
+    if ((b.sineAmp|0) !== 0 || (b.sineFreqHz|0) !== 0) {
+      const speedNow = Math.max(0.0001, Math.hypot(b.vx, b.vy))
+      const px = -b.vy / speedNow, py = b.vx / speedNow
+      const t = world.time - (b.birthTime || 0)
+      const phase = (b.sineFreqHz || 0) * t * Math.PI * 2
+      const offset = Math.sin(phase) * (b.sineAmp || 0)
+      const delta = offset - (b.sinePrevOffset || 0)
+      b.x += px * delta
+      b.y += py * delta
+      b.sinePrevOffset = offset
+    }
     b.x += b.vx * dt
     b.y += b.vy * dt
     if (b.x < -world.width || b.x > world.width || b.y < -world.height || b.y > world.height) {

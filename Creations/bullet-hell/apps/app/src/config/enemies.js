@@ -20,7 +20,7 @@ export const enemies = {
     onFireFx: { use: 'onFireWindupShake' },
   },
   minibossA: {
-    id: 'minibossA', size: { w: 60, h: 44 }, hp: 400, boss: true, score: 500,
+    id: 'minibossA', size: { w: 60, h: 44 }, hp: 100, boss: true, score: 500,
     movement: { use: 'hoverTopBand', override: { params: { yRatio: 0.85, sineXAmplitude: 60 } } },
     firePhases: [
       { duration: 6, shot: { use: 'spread5' } },

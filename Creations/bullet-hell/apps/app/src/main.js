@@ -102,6 +102,11 @@ completeEl.setAttribute('data-testid', 'level-complete')
 completeEl.style.display = 'none'
 document.body.appendChild(completeEl)
 
+// Message container so we don't overwrite button
+const completeMsg = document.createElement('div')
+completeMsg.style.marginBottom = '8px'
+completeEl.appendChild(completeMsg)
+
 const continueBtn = document.createElement('button')
 continueBtn.textContent = 'Continue'
 continueBtn.style.marginTop = '8px'
@@ -116,10 +121,11 @@ continueBtn.addEventListener('click', () => {
     completeEl.style.display = 'none'
   } else {
     // show you win
-    showWin()
+    completeMsg.textContent = `YOU WIN\n\nscore ${formatScore(score)}\nhi ${formatScore(highScore)}\ncombo_peak ${formatScore(comboPeak)}\nmisses ${formatScore(misses)}`
+    continueBtn.style.display = 'none'
+    completeEl.style.display = 'block'
   }
 })
-completeEl.appendChild(document.createElement('br'))
 completeEl.appendChild(continueBtn)
 
 const fpsWindowMs = 1000
@@ -347,7 +353,8 @@ function render(timeMs) {
     for (let i = 0; i < n; i++) {
       const ang = start + step * i
       const dx = Math.cos(ang), dy = Math.sin(ang)
-      firePlayerBullet(world, p.x, p.y + 12, dx, dy, config.player.autoBulletSpeed)
+      const sine = config.player.spray.sine || { amplitude: 0, frequencyHz: 0 }
+      firePlayerBullet(world, p.x, p.y + 12, dx, dy, config.player.autoBulletSpeed, { sineAmp: sine.amplitude || 0, sineFreqHz: sine.frequencyHz || 0 })
     }
     playerFireTimer = config.player.autoFireInterval
   }
@@ -463,11 +470,12 @@ function render(timeMs) {
         world.coins.pop(); i--
       }
     }
-    // Powerup pickup (star): grant temporary bonus (increase spray count)
+    // Powerup pickup (star): grant temporary bonus (increase spray count + spread)
     for (let i = 0; i < world.powerups.length; i++) {
       const u = world.powerups[i]
       if (Math.hypot(u.x - p.x, u.y - p.y) < 14) {
-        config.player.spray.count = Math.min(20, (config.player.spray.count|0) + 5)
+        config.player.spray.count = Math.min(20, (config.player.spray.count|0) + 2)
+        config.player.spray.spreadDeg = Math.min(60, (config.player.spray.spreadDeg||0) + 6)
         world.powerups[i] = world.powerups[world.powerups.length - 1]
         world.powerups.pop(); i--
       }
@@ -544,7 +552,7 @@ function render(timeMs) {
   // Level complete overlay when runner done and no boss alive
   if (runner.done && !boss) {
     if (completeEl.style.display !== 'block') {
-      completeEl.textContent = `LEVEL COMPLETE\n\nscore ${formatScore(score)}\nhi ${formatScore(highScore)}\ncombo_peak ${formatScore(comboPeak)}\nmisses ${formatScore(misses)}`
+      completeMsg.textContent = `LEVEL COMPLETE\n\nscore ${formatScore(score)}\nhi ${formatScore(highScore)}\ncombo_peak ${formatScore(comboPeak)}\nmisses ${formatScore(misses)}`
       completeEl.style.display = 'block'
     }
   } else {

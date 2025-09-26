@@ -10,11 +10,12 @@ const config = {
     maxKeySpeed: 220,         // px/s max from key accel
     frictionPerSec: 3,      // decay rate (s^-1) for horizontal velocity
     scrollImpulse: 40,       // px/s per scroll event impulse
-    autoFireInterval: 0.02,   // seconds between auto shots
-    autoBulletSpeed: 300,     // px/s
+    autoFireInterval: 0.06,   // seconds between auto shots (start slower)
+    autoBulletSpeed: 320,     // px/s
     spray: {
-      count: 10,               // number of bullets per volley
-      spreadDeg: 34,          // total spread angle in degrees
+      count: 3,               // start small; upgrades increase
+      spreadDeg: 12,          // start narrow; upgrades increase
+      sine: { amplitude: 10, frequencyHz: 6 }, // fast sine for player shots
     },
   },
   enemy: {
