@@ -49,73 +49,21 @@ layout(location=0) in vec2 a_pos;       // unit quad verts [-0.5,0.5]
 layout(location=1) in vec2 a_instPos;   // world center
 layout(location=2) in vec2 a_instSize;  // world size
 layout(location=3) in vec4 a_color;     // base color
-layout(location=4) in vec2 a_params;    // x: seed, y: damage [0,1]
 uniform vec2 u_worldSize;
 out vec4 v_color;
-out vec2 v_uv;        // local 0..1
-out vec2 v_params;    // seed, damage
 void main(){
   vec2 world = a_instPos + a_pos * a_instSize;
   vec2 ndc = (world / u_worldSize) * 2.0 - 1.0;
   ndc.y = -ndc.y; // flip Y to screen coords
   gl_Position = vec4(ndc, 0.0, 1.0);
   v_color = a_color;
-  v_uv = a_pos * 0.5 + 0.5;
-  v_params = a_params;
 }`
 
 const fs2d = `#version 300 es
 precision highp float;
 in vec4 v_color;
-in vec2 v_uv;
-in vec2 v_params; // seed, damage
 out vec4 outColor;
-
-// Hash helpers
-float hash11(float p) {
-  p = fract(p * 0.1031);
-  p *= p + 33.33;
-  p *= p + p;
-  return fract(p);
-}
-vec2 hash21(float p) {
-  float n = hash11(p);
-  return vec2(hash11(n + 1.2345), hash11(n + 6.5432));
-}
-
-// Simple Voronoi crack mask using F2-F1 metric
-float crackMask(vec2 uv, float seed, float damage) {
-  // cell count scales with damage (more cracks over time)
-  float cells = mix(6.0, 18.0, clamp(damage, 0.0, 1.0));
-  vec2 p = uv * cells;
-  vec2 pi = floor(p);
-  vec2 pf = fract(p);
-  float f1 = 1e9, f2 = 1e9;
-  for (int j=-1;j<=1;j++){
-    for (int i=-1;i<=1;i++){
-      vec2 g = vec2(float(i), float(j));
-      vec2 o = hash21(dot(pi+g, vec2(127.1,311.7))+seed*91.7) - 0.5;
-      vec2 d = g + o + 0.5 - pf;
-      float dist = dot(d,d);
-      if (dist < f1) { f2 = f1; f1 = dist; }
-      else if (dist < f2) { f2 = dist; }
-    }
-  }
-  float edge = abs(f2 - f1);
-  float thickness = mix(0.01, 0.08, damage);
-  float m = smoothstep(thickness, thickness*0.5, edge);
-  return m;
-}
-
-void main(){
-  float seed = v_params.x;
-  float damage = clamp(v_params.y, 0.0, 1.0);
-  float cracks = crackMask(clamp(v_uv, 0.0, 1.0), seed, damage);
-  vec3 base = v_color.rgb;
-  vec3 crackCol = vec3(0.02,0.02,0.02);
-  vec3 col = mix(base, crackCol, cracks);
-  outColor = vec4(col, 1.0);
-}`
+void main(){ outColor = v_color; }`
 
 const program = createProgram(gl, vs2d, fs2d)
 gl.useProgram(program)
@@ -181,18 +129,32 @@ void main(){
   outColor = vec4(sum, 1.0);
 }`
 
-// Composite blurred brightness with original scene
+// Single-pass brightened blur and composite (streamlined)
 const fsComposite = `#version 300 es
 precision highp float;
 in vec2 v_uv;
 out vec4 outColor;
 uniform sampler2D u_scene;
-uniform sampler2D u_blur;
+uniform float u_threshold;
 uniform float u_bloom;
 void main(){
+  vec2 texel = 1.0 / vec2(textureSize(u_scene, 0));
   vec3 scene = texture(u_scene, v_uv).rgb;
-  vec3 blur = texture(u_blur, v_uv).rgb;
-  outColor = vec4(scene + blur * u_bloom, 1.0);
+  vec3 sum = vec3(0.0);
+  float w[9];
+  w[0]=0.05; w[1]=0.07; w[2]=0.1; w[3]=0.13; w[4]=0.2; w[5]=0.13; w[6]=0.1; w[7]=0.07; w[8]=0.05;
+  int k = 0;
+  for (int y=-4;y<=4;y++){
+    for (int x=-4;x<=4;x++){
+      vec2 uv = v_uv + vec2(float(x), float(y)) * texel * 1.5;
+      vec3 s = texture(u_scene, uv).rgb;
+      float b = max(0.0, max(max(s.r, s.g), s.b) - u_threshold);
+      sum += s * b * w[int(abs(float(x)))];
+    }
+  }
+  sum /= 9.0 * 9.0;
+  vec3 outc = scene + sum * u_bloom;
+  outColor = vec4(outc, 1.0);
 }`
 
 const blurProg = createProgram(gl, vsPost, fsBlur)
@@ -202,7 +164,7 @@ const blurUThresh = gl.getUniformLocation(blurProg, 'u_threshold')
 
 const compProg = createProgram(gl, vsPost, fsComposite)
 const compUScene = gl.getUniformLocation(compProg, 'u_scene')
-const compUBlur = gl.getUniformLocation(compProg, 'u_blur')
+const compUThresh = gl.getUniformLocation(compProg, 'u_threshold')
 const compUBloom = gl.getUniformLocation(compProg, 'u_bloom')
 
 const postVao = gl.createVertexArray()
@@ -240,7 +202,7 @@ gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
 const instPosBuf = gl.createBuffer()
 const instSizeBuf = gl.createBuffer()
 const instColorBuf = gl.createBuffer()
-const instParamBuf = gl.createBuffer()
+// const instParamBuf = gl.createBuffer() // removed: no crack params
 
 gl.bindBuffer(gl.ARRAY_BUFFER, instPosBuf)
 gl.enableVertexAttribArray(1)
@@ -257,10 +219,7 @@ gl.enableVertexAttribArray(3)
 gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 0, 0)
 gl.vertexAttribDivisor(3, 1)
 
-gl.bindBuffer(gl.ARRAY_BUFFER, instParamBuf)
-gl.enableVertexAttribArray(4)
-gl.vertexAttribPointer(4, 2, gl.FLOAT, false, 0, 0)
-gl.vertexAttribDivisor(4, 1)
+// removed inst param attribute
 
 const uWorldSize = gl.getUniformLocation(program, 'u_worldSize')
 
@@ -300,7 +259,7 @@ function rnd() {
 // Game state
 const BRICKS_W = 50
 const BRICKS_H = 30
-const PADDLE_W = 28
+const PADDLE_W = 38
 const PADDLE_H = 6
 const BALL_SIZE = 4
 const WALL = { left: 0, right: WORLD_W, top: 0, bottom: WORLD_H }
@@ -323,6 +282,25 @@ function ballRelease(b) {
 
 const powerPool = []
 const powers = [] // active falling powerups {x,y,w,h,vy,type}
+// Active weapon effects
+let laserStacks = 0
+let missileStacks = 0
+let laserTimer = 0
+let missileTimer = 0
+const LASER_DURATION = 5.0
+const MISSILE_DURATION = 10.0
+// Visual missiles
+const missiles = [] // {x,y,tx,ty,speed,alive}
+// Laser visual segments (per-frame)
+let laserSegs = [] // [{x,y,w,h,r,g,b,a}]
+let laserHitAccum = new Map() // brickIndex -> accumulated seconds under beam
+
+function dropPowerup(x, y) {
+  // 1/10 chance drop
+  if (rnd() < 0.05) {
+    const p = powGet(); p.x = x; p.y = y; p.w = 8; p.h = 8; p.vy = 40; p.type = 1; powers.push(p)
+  }
+}
 function powGet() { return powerPool.length ? powerPool.pop() : { x:0,y:0,w:8,h:8,vy:30,type:0 } }
 function powRelease(p) { powerPool.push(p) }
 
@@ -375,7 +353,9 @@ function resetBricks(levelSeed) {
       const v = Math.max(0, Math.min(coarseH - 1, Math.floor(((gy + 0.5) / BRICKS_H) * coarseH)))
       const mazeWall = mazeMask[v * coarseW + u] === 1
       const alive = mazeWall
-      const hp = 1 + ((gx + gy + (levelSeed & 7)) % 3)
+      let hp = 1 + ((gx + gy + (levelSeed & 7)) % 3)
+      // Make the bottom 1/5 of screen easier: HP=1
+      if (y > oy + availH * 0.8) hp = 1
       bricks.push({ x, y, w: cellW * 0.95, h: cellH * 0.9, hp: alive ? hp : 0, alive })
     }
   }
@@ -458,6 +438,12 @@ function loadLevel(level, resetLives) {
   currentLevel = level
   const levelSeed = (baseSeed ^ (level * 0x9E3779B9)) >>> 0
   powers.length = 0
+  missiles.length = 0
+  laserSegs.length = 0
+  laserStacks = 0
+  missileStacks = 0
+  laserTimer = 0
+  missileTimer = 0
   seedRng(levelSeed)
   levelPalette = generatePalette(levelSeed)
   resetBricks(levelSeed)
@@ -590,13 +576,7 @@ function step(dt) {
         }
         br.hp -= 1
         score += 10
-        if (br.hp <= 0) {
-          br.alive = false
-          // High chance to spawn multiball powerups for perf testing
-          if (rnd() < 0.6) {
-            const p = powGet(); p.x = br.x; p.y = br.y; p.w = 8; p.h = 8; p.vy = 40; p.type = 1; powers.push(p)
-          }
-        }
+        if (br.hp <= 0) { br.alive = false; dropPowerup(br.x, br.y) }
         break
       }
     }
@@ -610,9 +590,132 @@ function step(dt) {
     const px0 = paddleX - PADDLE_W * 0.5, px1 = paddleX + PADDLE_W * 0.5
     const py0 = paddleY - PADDLE_H * 0.5, py1 = paddleY + PADDLE_H * 0.5
     if (p.x + p.w * 0.5 > px0 && p.x - p.w * 0.5 < px1 && p.y + p.h * 0.5 > py0 && p.y - p.h * 0.5 < py1) {
-      // Collect: spawn many balls
-      addBalls(16)
+      // Collect: randomize between multiball, laser, missile
+      const roll = (rnd())
+      if (roll < 0.34) {
+        addBalls(16)
+      } else if (roll < 0.67) {
+        laserStacks = Math.min(32, laserStacks + 1)
+        laserTimer = LASER_DURATION
+      } else {
+        missileStacks = Math.min(32, missileStacks + 1)
+        missileTimer = MISSILE_DURATION
+      }
       powRelease(p); powers.splice(i, 1); i--; continue
+    }
+  }
+
+  // Lasers: fire beams from paddle while timer active; spread increases with stacks
+  laserSegs.length = 0
+  if (laserTimer > 0) {
+    laserTimer = Math.max(0, laserTimer - dt)
+    const beams = Math.min(1 + Math.floor(laserStacks * 0.5), 9)
+    const spread = Math.min(0.6, 0.15 + laserStacks * 0.03)
+    // Continuous damage over time while intersecting bricks
+    for (let b = 0; b < beams; b++) {
+      const t = beams > 1 ? (b / (beams - 1)) : 0.5
+      const angle = (t - 0.5) * spread
+      const dirx = Math.sin(angle)
+      const diry = -Math.cos(angle)
+      // March along the beam
+      const steps = 40
+      const stepLen = 12
+      let sx = paddleX
+      let sy = paddleY - PADDLE_H
+      for (let s = 0; s < steps; s++) {
+        const bx0 = sx - 1, bx1 = sx + 1
+        const by0 = sy - 1, by1 = sy + 1
+        const candidates = []
+        brickTree.query(bx0, by0, bx1, by1, candidates)
+        for (let k = 0; k < candidates.length; k++) {
+          const br = bricks[candidates[k].ref]
+          if (!br || !br.alive) continue
+          if (sx > br.x - br.w*0.5 && sx < br.x + br.w*0.5 && sy > br.y - br.h*0.5 && sy < br.y + br.h*0.5) {
+            const key = candidates[k].ref
+            const prev = laserHitAccum.get(key) || 0
+            const next = prev + dt
+            if (next >= 0.2) {
+              br.hp -= 1
+              if (br.hp <= 0) { br.alive = false; dropPowerup(br.x, br.y) }
+              laserHitAccum.set(key, 0)
+            } else {
+              laserHitAccum.set(key, next)
+            }
+          }
+        }
+        // Draw laser segment as thin rectangle instance (visual)
+        const segX = sx + dirx * stepLen * 0.5
+        const segY = sy + diry * stepLen * 0.5
+        const segW = 2 + laserStacks * 0.3
+        const segH = stepLen
+        const lr = 1.0, lg = 0.2, lb = 0.6
+        const w = (Math.abs(diry) > 0.5) ? segW : segH
+        const h = (Math.abs(diry) > 0.5) ? segH : segW
+        laserSegs.push({ x: segX, y: segY, w, h, r: lr, g: lg, b: lb, a: 0.9 })
+        sx += dirx * stepLen
+        sy += diry * stepLen
+        if (sy < 0) break
+      }
+    }
+  } else {
+    laserStacks = 0
+    laserHitAccum.clear()
+  }
+
+  // Missiles: launch homing missiles periodically while timer active
+  if (missileTimer > 0) {
+    missileTimer = Math.max(0, missileTimer - dt)
+    const launchesPerSec = Math.min(6, 1 + Math.floor(missileStacks * 0.5))
+    if (!step._missileCooldown) step._missileCooldown = 0
+    step._missileCooldown -= dt
+    if (step._missileCooldown <= 0) {
+      step._missileCooldown = 1 / launchesPerSec
+      const num = Math.min(1 + Math.floor(missileStacks * 0.5), 8)
+      for (let i = 0; i < num; i++) {
+        // Find nearest alive brick
+        let best = -1, bestD2 = 1e12
+        for (let j = 0; j < bricks.length; j++) {
+          const br = bricks[j]
+          if (!br.alive) continue
+          const dx = br.x - paddleX, dy = br.y - paddleY
+          const d2 = dx*dx + dy*dy
+          if (d2 < bestD2) { bestD2 = d2; best = j }
+        }
+        if (best >= 0) {
+          const br = bricks[best]
+          missiles.push({ x: paddleX, y: paddleY - 12, tx: br.x, ty: br.y, speed: 280 + missileStacks * 30, alive: true })
+        }
+      }
+    }
+  } else {
+    missileStacks = 0
+  }
+
+  // Advance missiles, draw and apply splash on impact
+  for (let i = 0; i < missiles.length; i++) {
+    const m = missiles[i]
+    if (!m.alive) continue
+    const dx = m.tx - m.x, dy = m.ty - m.y
+    const d = Math.sqrt(dx*dx + dy*dy) || 1
+    const vx = (dx / d) * m.speed
+    const vy = (dy / d) * m.speed
+    m.x += vx * dt
+    m.y += vy * dt
+    // Visual drawing moved to render(); do not push here because render clears buffers after step
+    if (d < 8) {
+      m.alive = false
+      const radius = 18 + missileStacks * 2
+      // Damage nearest brick and splash
+      for (let j = 0; j < bricks.length; j++) {
+        const o = bricks[j]
+        if (!o.alive) continue
+        const ddx = o.x - m.tx, ddy = o.y - m.ty
+        const d2 = ddx*ddx + ddy*ddy
+        if (d2 <= (radius*radius)) {
+          o.hp -= (d2 < 36 ? 3 : 1)
+          if (o.hp <= 0) { o.alive = false; dropPowerup(o.x, o.y) }
+        }
+      }
     }
   }
 
@@ -664,28 +767,24 @@ function step(dt) {
 const posData = []
 const sizeData = []
 const colorData = []
-const paramData = []
+// const paramData = [] // removed
 
-function pushInstance(x, y, w, h, r, g, b, a, seed = 0, damage = 0) {
+function pushInstance(x, y, w, h, r, g, b, a) {
   posData.push(x, y)
   sizeData.push(w, h)
   colorData.push(r, g, b, a)
-  paramData.push(seed, damage)
 }
 
 function drawInstances() {
   const pos = new Float32Array(posData)
   const size = new Float32Array(sizeData)
   const col = new Float32Array(colorData)
-  const par = new Float32Array(paramData)
   gl.bindBuffer(gl.ARRAY_BUFFER, instPosBuf)
   gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW)
   gl.bindBuffer(gl.ARRAY_BUFFER, instSizeBuf)
   gl.bufferData(gl.ARRAY_BUFFER, size, gl.DYNAMIC_DRAW)
   gl.bindBuffer(gl.ARRAY_BUFFER, instColorBuf)
   gl.bufferData(gl.ARRAY_BUFFER, col, gl.DYNAMIC_DRAW)
-  gl.bindBuffer(gl.ARRAY_BUFFER, instParamBuf)
-  gl.bufferData(gl.ARRAY_BUFFER, par, gl.DYNAMIC_DRAW)
   gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, pos.length / 2)
 }
 
@@ -777,8 +876,7 @@ function render(now) {
     const br = bricks[i]
     if (!br.alive) continue
     const hpColor = br.hp === 1 ? levelPalette.brick1 : br.hp === 2 ? levelPalette.brick2 : levelPalette.brick3
-    const damage = 1.0 - Math.max(0.0, Math.min(1.0, br.hp / 3.0))
-    pushInstance(br.x, br.y, br.w, br.h, hpColor[0], hpColor[1], hpColor[2], 1.0, (i * 13.37) % 1000, damage)
+    pushInstance(br.x, br.y, br.w, br.h, hpColor[0], hpColor[1], hpColor[2], 1.0)
   }
 
   // Paddle
@@ -796,33 +894,33 @@ function render(now) {
     pushInstance(p.x, p.y, p.w, p.h, 0.2, 1.0, 0.6, 1)
   }
 
-  drawInstances()
-  // Horizontal blur with bright-pass
-  gl.bindFramebuffer(gl.FRAMEBUFFER, offBlurFbo)
-  gl.useProgram(blurProg)
-  gl.bindVertexArray(postVao)
-  gl.activeTexture(gl.TEXTURE0)
-  gl.bindTexture(gl.TEXTURE_2D, offColor)
-  gl.uniform1i(blurUTex, 0)
-  gl.uniform2f(blurUDir, 1, 0)
-  gl.uniform1f(blurUThresh, 0.3)
-  gl.drawArrays(gl.TRIANGLES, 0, 6)
+  // Laser segments (draw after geometry so they sit on top)
+  for (let i = 0; i < laserSegs.length; i++) {
+    const s = laserSegs[i]
+    pushInstance(s.x, s.y, s.w, s.h, s.r, s.g, s.b, s.a)
+  }
 
-  // Vertical blur
+  // Missiles (visible quads)
+  for (let i = 0; i < missiles.length; i++) {
+    const m = missiles[i]
+    if (!m.alive) continue
+    pushInstance(m.x, m.y, 8, 14, 1.0, 0.8, 0.2, 1.0)
+  }
+
+  drawInstances()
+  // Single-pass composite with blur kernel
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   gl.useProgram(compProg)
   gl.bindVertexArray(postVao)
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, offColor)
   gl.uniform1i(compUScene, 0)
-  gl.activeTexture(gl.TEXTURE1)
-  gl.bindTexture(gl.TEXTURE_2D, offBlurTex)
-  gl.uniform1i(compUBlur, 1)
+  gl.uniform1f(compUThresh, 0.3)
   gl.uniform1f(compUBloom, 4.0)
   gl.drawArrays(gl.TRIANGLES, 0, 6)
 
   // HUD
-  if (hudEl) hudEl.textContent = `Lvl ${currentLevel}  Lives ${lives}  Balls ${balls.length}  Score ${score}`
+  if (hudEl) hudEl.textContent = `Lvl ${currentLevel}  Lives ${lives}  Balls ${balls.length}  Score ${score}  Laser ${laserStacks>0?laserStacks:0}(${laserTimer.toFixed(1)}s)  Missile ${missileStacks>0?missileStacks:0}(${missileTimer.toFixed(1)}s)`
 
   requestAnimationFrame(render)
 }
