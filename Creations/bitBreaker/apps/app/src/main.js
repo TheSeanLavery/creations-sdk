@@ -276,7 +276,8 @@ function resetBricks(levelSeed) {
   const ox = GAP_X
   const oy = GAP_TOP
   // Maze-only layout (no mixing)
-  const mazeCols = 25, mazeRows = 15
+  // Coarser maze grid to produce longer continuous walls
+  const mazeCols = 16, mazeRows = 10
   const { mask: mazeMask, width: coarseW, height: coarseH } = generateMazeMask(mazeCols, mazeRows, levelSeed ^ 0xA2C79)
   for (let gy = 0; gy < BRICKS_H; gy++) {
     for (let gx = 0; gx < BRICKS_W; gx++) {
@@ -647,12 +648,15 @@ const overlayText = document.getElementById('overlay-text')
 const btnRestart = document.getElementById('btn-restart')
 let showMenu = true
 let showOverlay = false
+let gameRunning = false
 let score = 0
 startBtn?.addEventListener('click', () => {
   baseSeed = parseInt(seedInput?.value || '12345', 10) || 12345
   loadLevel(1, true)
   showMenu = false
   menuEl.style.display = 'none'
+  const cvs = document.getElementById('glcanvas'); if (cvs) cvs.style.visibility = 'visible'
+  if (!gameRunning) { gameRunning = true; requestAnimationFrame(render) }
 })
 
 let prev = performance.now()
@@ -738,8 +742,7 @@ function ensureCanvasCssSize() {
 }
 
 ensureCanvasCssSize()
-// Start at menu; wait for Start button
-    requestAnimationFrame(render)
+// Start at menu; do not run until Start pressed
 
 // Expose minimal debug for tests
 window.BB_DEBUG = {
