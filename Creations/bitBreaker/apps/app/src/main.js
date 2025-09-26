@@ -853,16 +853,15 @@ let prev = performance.now()
 
 function render(now) {
   resize()
-  ensureOffscreen()
   const dt = Math.min(0.05, Math.max(0, (now - prev) * 0.001))
   prev = now
   step(dt)
 
-  // Render scene to offscreen
-  gl.bindFramebuffer(gl.FRAMEBUFFER, offFbo)
-  gl.clear(gl.COLOR_BUFFER_BIT)
-  // Update clear color with palette bg
+  // Render scene directly to screen (no post-processing)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  // Update clear color with palette bg then clear
   gl.clearColor(levelPalette.bg[0], levelPalette.bg[1], levelPalette.bg[2], 1)
+  gl.clear(gl.COLOR_BUFFER_BIT)
   gl.useProgram(program)
   gl.uniform2f(uWorldSize, WORLD_W, WORLD_H)
   gl.bindVertexArray(vao)
@@ -908,16 +907,6 @@ function render(now) {
   }
 
   drawInstances()
-  // Single-pass composite with blur kernel
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-  gl.useProgram(compProg)
-  gl.bindVertexArray(postVao)
-  gl.activeTexture(gl.TEXTURE0)
-  gl.bindTexture(gl.TEXTURE_2D, offColor)
-  gl.uniform1i(compUScene, 0)
-  gl.uniform1f(compUThresh, 0.3)
-  gl.uniform1f(compUBloom, 4.0)
-  gl.drawArrays(gl.TRIANGLES, 0, 6)
 
   // HUD
   if (hudEl) hudEl.textContent = `Lvl ${currentLevel}  Lives ${lives}  Balls ${balls.length}  Score ${score}  Laser ${laserStacks>0?laserStacks:0}(${laserTimer.toFixed(1)}s)  Missile ${missileStacks>0?missileStacks:0}(${missileTimer.toFixed(1)}s)`
