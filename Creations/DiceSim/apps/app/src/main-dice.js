@@ -490,8 +490,8 @@ function startAccelerometer(frequency = 60) {
         const tx0 = (typeof data.tiltX === 'number') ? data.tiltX : (typeof data.x === 'number' ? data.x : 0)
         const ty0 = (typeof data.tiltY === 'number') ? data.tiltY : (typeof data.y === 'number' ? data.y : -1)
         const tz0 = (typeof data.tiltZ === 'number') ? data.tiltZ : (typeof data.z === 'number' ? data.z : 0)
-        // Flip all axes to correct inverted feel (left/right, up/down, in/out)
-        const tx = -tx0, ty = -ty0, tz = -tz0
+        // Fix axes: keep X as-is (left/right), flip Y and Z
+        const tx = tx0, ty = -ty0, tz = -tz0
         accelTilt[0] = tx
         accelTilt[1] = ty
         accelTilt[2] = tz
