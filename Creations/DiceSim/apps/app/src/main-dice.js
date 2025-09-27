@@ -74,44 +74,166 @@ function ensureCanvasCssSize() {
 }
 ensureCanvasCssSize()
 
-// --- Dice geometry (unit cube with face normals) ---
-// Side length s; we scale in shader via model matrix. Normals per face.
-const cubePositions = new Float32Array([
-  // +X
-  1, -1, -1,  1, 1, -1,  1, 1, 1,  1, -1, 1,
-  // -X
-  -1, -1, 1,  -1, 1, 1,  -1, 1, -1,  -1, -1, -1,
-  // +Y
-  -1, 1, -1,  1, 1, -1,  1, 1, 1,  -1, 1, 1,
-  // -Y
-  -1, -1, 1,  1, -1, 1,  1, -1, -1,  -1, -1, -1,
-  // +Z
-  -1, -1, 1,  -1, 1, 1,  1, 1, 1,  1, -1, 1,
-  // -Z
-  1, -1, -1,  1, 1, -1,  -1, 1, -1,  -1, -1, -1,
-])
-const cubeNormals = new Float32Array([
-  // +X
-  1,0,0, 1,0,0, 1,0,0, 1,0,0,
-  // -X
-  -1,0,0, -1,0,0, -1,0,0, -1,0,0,
-  // +Y
-  0,1,0, 0,1,0, 0,1,0, 0,1,0,
-  // -Y
-  0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0,
-  // +Z
-  0,0,1, 0,0,1, 0,0,1, 0,0,1,
-  // -Z
-  0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1,
-])
-const cubeIndices = new Uint16Array([
-  0,1,2, 0,2,3,
-  4,5,6, 4,6,7,
-  8,9,10, 8,10,11,
-  12,13,14, 12,14,15,
-  16,17,18, 16,18,19,
-  20,21,22, 20,22,23,
-])
+// --- Procedural dice mesh with carved pips (per-face displacement) ---
+function generateDiceMesh(options = {}) {
+  const faceHalf = 1; // base cube half-extent in model space before scaling
+  const resolution = options.resolution || 20; // grid per face side
+  const pipRadius = options.pipRadius || 0.18;
+  const pipDepth = options.pipDepth || 0.25; // depth along inward normal (in model units)
+  const pipSpread = options.pipSpread || 0.6; // distance of corner pips from center in uv
+  const centerPip = [0, 0];
+  const corners = [
+    [-pipSpread, -pipSpread],
+    [-pipSpread,  pipSpread],
+    [ pipSpread, -pipSpread],
+    [ pipSpread,  pipSpread],
+  ];
+  const mids = [ [-pipSpread, 0], [ pipSpread, 0] ];
+
+  function pipsForValue(val) {
+    switch (val) {
+      case 1: return [centerPip];
+      case 2: return [corners[0], corners[3]];
+      case 3: return [corners[0], centerPip, corners[3]];
+      case 4: return [corners[0], corners[1], corners[2], corners[3]];
+      case 5: return [corners[0], corners[1], centerPip, corners[2], corners[3]];
+      case 6: return [corners[0], corners[1], mids[0], mids[1], corners[2], corners[3]];
+      default: return [];
+    }
+  }
+
+  // Face definitions: normal and local axes u, v
+  const faces = [
+    { n: [ 1, 0, 0], u: [0, 0, -1], v: [0, 1, 0], val: 1 }, // +X
+    { n: [-1, 0, 0], u: [0, 0,  1], v: [0, 1, 0], val: 6 }, // -X
+    { n: [ 0, 1, 0], u: [1, 0,  0], v: [0, 0, 1], val: 2 }, // +Y
+    { n: [ 0,-1, 0], u: [1, 0,  0], v: [0, 0,-1], val: 5 }, // -Y
+    { n: [ 0, 0, 1], u: [1, 0,  0], v: [0, 1, 0], val: 3 }, // +Z
+    { n: [ 0, 0,-1], u: [-1,0,  0], v: [0, 1, 0], val: 4 }, // -Z
+  ];
+
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  let vertBase = 0;
+
+  function addVec3(a, b, s) { return [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s]; }
+  function mulAdd(a, b, s, out) { out[0] += b[0] * s; out[1] += b[1] * s; out[2] += b[2] * s; }
+  function norm3(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; }
+
+  for (let f = 0; f < faces.length; f++) {
+    const face = faces[f];
+    const n = face.n, u = face.u, v = face.v;
+    const center = [n[0]*faceHalf, n[1]*faceHalf, n[2]*faceHalf];
+    const pips = pipsForValue(face.val);
+    // Generate grid vertices
+    const grid = new Array((resolution+1)*(resolution+1));
+    const faceIndexStart = indices.length;
+    for (let iy = 0; iy <= resolution; iy++) {
+      for (let ix = 0; ix <= resolution; ix++) {
+        const s = (ix / resolution) * 2 - 1; // [-1,1]
+        const t = (iy / resolution) * 2 - 1; // [-1,1]
+        // Base position on face plane
+        let px = center[0] + u[0]*s*faceHalf + v[0]*t*faceHalf;
+        let py = center[1] + u[1]*s*faceHalf + v[1]*t*faceHalf;
+        let pz = center[2] + u[2]*s*faceHalf + v[2]*t*faceHalf;
+        // Compute indentation depth from nearest pip
+        let depth = 0;
+        let gradU = 0, gradV = 0;
+        for (let k = 0; k < pips.length; k++) {
+          const cx = pips[k][0];
+          const cy = pips[k][1];
+          const dx = s - cx;
+          const dy = t - cy;
+          const r = Math.hypot(dx, dy);
+          const r0 = pipRadius;
+          const r1 = pipRadius * 0.6; // inner core for deeper region
+          let kOuter = 0;
+          if (r < r0) {
+            // Smooth well: 0 at edge -> 1 at center
+            const x = Math.min(1, Math.max(0, (r0 - r) / (r0 - r1)));
+            kOuter = x * x * (3 - 2 * x);
+            const d = pipDepth * (0.3 + 0.7 * kOuter);
+            if (d > depth) depth = d;
+            // Approx gradient for normal tilt
+            const gScale = (r > 1e-5) ? (-pipDepth * 0.8 * kOuter / r) : 0;
+            gradU += dx * gScale;
+            gradV += dy * gScale;
+          }
+        }
+        // Apply indentation along inward normal (negative along n from face plane toward cube center)
+        px -= n[0] * depth;
+        py -= n[1] * depth;
+        pz -= n[2] * depth;
+        positions.push(px, py, pz);
+        // Initial normal is face normal; will refine by accumulating face triangles later
+        normals.push(n[0], n[1], n[2]);
+        grid[iy*(resolution+1) + ix] = vertBase + iy*(resolution+1) + ix;
+      }
+    }
+    // Build indices per quad
+    for (let iy = 0; iy < resolution; iy++) {
+      for (let ix = 0; ix < resolution; ix++) {
+        const i0 = grid[iy*(resolution+1) + ix];
+        const i1 = grid[iy*(resolution+1) + ix + 1];
+        const i2 = grid[(iy+1)*(resolution+1) + ix + 1];
+        const i3 = grid[(iy+1)*(resolution+1) + ix];
+        indices.push(i0, i1, i2, i0, i2, i3);
+      }
+    }
+    // Ensure outward winding: flip all tris on this face if needed
+    if (indices.length > faceIndexStart) {
+      // Sample first triangle normal
+      const a = indices[faceIndexStart + 0], b = indices[faceIndexStart + 1], c = indices[faceIndexStart + 2];
+      const ax = positions[3*a], ay = positions[3*a+1], az = positions[3*a+2];
+      const bx = positions[3*b], by = positions[3*b+1], bz = positions[3*b+2];
+      const cx = positions[3*c], cy = positions[3*c+1], cz = positions[3*c+2];
+      const ux = bx - ax, uy = by - ay, uz = bz - az;
+      const vx = cx - ax, vy = cy - ay, vz = cz - az;
+      const nx = uy * vz - uz * vy;
+      const ny = uz * vx - ux * vz;
+      const nz = ux * vy - uy * vx;
+      const dot = nx * n[0] + ny * n[1] + nz * n[2];
+      if (dot < 0) {
+        for (let i = faceIndexStart; i < indices.length; i += 3) {
+          const tmp = indices[i+1]; indices[i+1] = indices[i+2]; indices[i+2] = tmp;
+        }
+      }
+    }
+    vertBase += (resolution+1)*(resolution+1);
+  }
+
+  // Recompute vertex normals from faces (per-face only; no cross-face sharing)
+  const acc = new Array(positions.length / 3).fill(0).map(() => [0,0,0]);
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i], b = indices[i+1], c = indices[i+2];
+    const ax = positions[3*a], ay = positions[3*a+1], az = positions[3*a+2];
+    const bx = positions[3*b], by = positions[3*b+1], bz = positions[3*b+2];
+    const cx = positions[3*c], cy = positions[3*c+1], cz = positions[3*c+2];
+    const ux = bx - ax, uy = by - ay, uz = bz - az;
+    const vx = cx - ax, vy = cy - ay, vz = cz - az;
+    const nx = uy * vz - uz * vy;
+    const ny = uz * vx - ux * vz;
+    const nz = ux * vy - uy * vx;
+    // Outward normal is along face.n; ensure we accumulate outward
+    acc[a][0] += nx; acc[a][1] += ny; acc[a][2] += nz;
+    acc[b][0] += nx; acc[b][1] += ny; acc[b][2] += nz;
+    acc[c][0] += nx; acc[c][1] += ny; acc[c][2] += nz;
+  }
+  const outNormals = new Float32Array(normals.length);
+  for (let i = 0; i < acc.length; i++) {
+    const n = norm3(acc[i]);
+    outNormals[3*i] = n[0]; outNormals[3*i+1] = n[1]; outNormals[3*i+2] = n[2];
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    normals: outNormals,
+    indices: new Uint32Array(indices),
+  };
+}
+
+const diceMesh = generateDiceMesh({ resolution: 20, pipRadius: 0.18, pipDepth: 0.28, pipSpread: 0.6 })
 
 // --- Shaders ---
 const diceVS = `#version 300 es
@@ -120,104 +242,22 @@ layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_normal;
 uniform mat4 u_mvp;
 uniform mat4 u_model;
-out vec3 v_pos_model;
-out vec3 v_nrm_model;
+out vec3 v_nrm_world;
 void main(){
-  v_pos_model = a_position;
-  v_nrm_model = a_normal;
+  vec3 n = mat3(u_model) * a_normal;
+  v_nrm_world = normalize(n);
   gl_Position = u_mvp * u_model * vec4(a_position, 1.0);
 }`
 
-// Fragment shader simulates pip indentations using signed-distance discs per face.
-// This creates convincing 3D-looking dents (lighting only), while keeping cube geometry simple.
 const diceFS = `#version 300 es
 precision highp float;
-in vec3 v_pos_model;
-in vec3 v_nrm_model;
+in vec3 v_nrm_world;
 out vec4 outColor;
-
 const vec3 LIGHT_DIR = normalize(vec3(0.6, 0.8, 0.4));
 const vec3 BASE_COLOR = vec3(0.95);
-
-float sdCircle(vec2 p, float r){ return length(p) - r; }
-
-float addPip(vec2 uv, vec2 c, float r, out vec2 grad){
-  vec2 d = uv - c;
-  float len = length(d);
-  float k = smoothstep(0.25, -0.05, len - r);
-  grad = (len > 1e-5) ? (d / len) * k : vec2(0.0);
-  return k;
-}
-
 void main(){
-  vec3 n = normalize(v_nrm_model);
-  int faceId = 0; // +X
-  vec2 uv;
-  // Map model position to face-local uv in [-0.5,0.5]
-  if (n.x>0.5) { faceId=0; uv = vec2(v_pos_model.z, -v_pos_model.y) * 0.5; }
-  else if (n.x<-0.5) { faceId=1; uv = vec2(v_pos_model.z, v_pos_model.y) * 0.5; }
-  else if (n.y>0.5) { faceId=2; uv = vec2(v_pos_model.x, v_pos_model.z) * 0.5; }
-  else if (n.y<-0.5) { faceId=3; uv = vec2(v_pos_model.x, -v_pos_model.z) * 0.5; }
-  else if (n.z>0.5) { faceId=4; uv = vec2(v_pos_model.x, v_pos_model.y) * 0.5; }
-  else { faceId=5; uv = vec2(-v_pos_model.x, v_pos_model.y) * 0.5; }
-
-  // Determine pip layout value for each face
-  int val = 1;
-  if (faceId==0) val=1;      // +X
-  else if (faceId==1) val=6; // -X
-  else if (faceId==2) val=2; // +Y
-  else if (faceId==3) val=5; // -Y
-  else if (faceId==4) val=3; // +Z
-  else if (faceId==5) val=4; // -Z
-
-  float r = 0.18; // pip radius in uv units
-  float dent = 0.0;
-  vec2 gradSum = vec2(0.0);
-  vec2 g;
-
-  // Place pips
-  if (val==1) {
-    dent += addPip(uv, vec2(0.0,0.0), r, g); gradSum += g;
-  } else if (val==2) {
-    dent += addPip(uv, vec2(-0.5,-0.5), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.5,0.5), r, g); gradSum += g;
-  } else if (val==3) {
-    dent += addPip(uv, vec2(-0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.0,0.0), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,0.6), r, g); gradSum += g;
-  } else if (val==4) {
-    dent += addPip(uv, vec2(-0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(-0.6,0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,0.6), r, g); gradSum += g;
-  } else if (val==5) {
-    dent += addPip(uv, vec2(-0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(-0.6,0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.0,0.0), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,0.6), r, g); gradSum += g;
-  } else if (val==6) {
-    dent += addPip(uv, vec2(-0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(-0.6,0.0), r, g); gradSum += g;
-    dent += addPip(uv, vec2(-0.6,0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,-0.6), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,0.0), r, g); gradSum += g;
-    dent += addPip(uv, vec2(0.6,0.6), r, g); gradSum += g;
-  }
-
-  // Approximate normal perturbation: bend toward inward (face) and radial gradient
-  vec3 planeVec;
-  if (faceId==0) planeVec = normalize(vec3(gradSum.y, -gradSum.x, gradSum.x));
-  else if (faceId==1) planeVec = normalize(vec3(-gradSum.y, gradSum.x, gradSum.x));
-  else if (faceId==2) planeVec = normalize(vec3(gradSum.x, gradSum.y, gradSum.y));
-  else if (faceId==3) planeVec = normalize(vec3(gradSum.x, -gradSum.y, -gradSum.y));
-  else if (faceId==4) planeVec = normalize(vec3(gradSum.x, gradSum.y, gradSum.x));
-  else planeVec = normalize(vec3(-gradSum.x, gradSum.y, -gradSum.x));
-
-  vec3 modN = normalize(n - 0.6 * planeVec - 0.4 * dent * n);
-  float ndl = max(0.0, dot(modN, normalize(LIGHT_DIR)));
+  float ndl = max(0.0, dot(normalize(v_nrm_world), LIGHT_DIR));
   vec3 color = BASE_COLOR * (0.25 + 0.75 * ndl);
-  color *= mix(1.0, 0.35, clamp(dent * 5.0, 0.0, 1.0));
   outColor = vec4(color, 1.0);
 }`
 
@@ -265,17 +305,17 @@ const diceVAO = gl.createVertexArray()
 gl.bindVertexArray(diceVAO)
 const dicePosBuf = gl.createBuffer()
 gl.bindBuffer(gl.ARRAY_BUFFER, dicePosBuf)
-gl.bufferData(gl.ARRAY_BUFFER, cubePositions, gl.STATIC_DRAW)
+gl.bufferData(gl.ARRAY_BUFFER, diceMesh.positions, gl.STATIC_DRAW)
 gl.enableVertexAttribArray(0)
 gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
 const diceNrmBuf = gl.createBuffer()
 gl.bindBuffer(gl.ARRAY_BUFFER, diceNrmBuf)
-gl.bufferData(gl.ARRAY_BUFFER, cubeNormals, gl.STATIC_DRAW)
+gl.bufferData(gl.ARRAY_BUFFER, diceMesh.normals, gl.STATIC_DRAW)
 gl.enableVertexAttribArray(1)
 gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0)
 const diceIdxBuf = gl.createBuffer()
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, diceIdxBuf)
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIndices, gl.STATIC_DRAW)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, diceMesh.indices, gl.STATIC_DRAW)
 const u_mvp = gl.getUniformLocation(diceProg, 'u_mvp')
 const u_model = gl.getUniformLocation(diceProg, 'u_model')
 
@@ -337,7 +377,7 @@ gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
 
 // --- Physics state ---
 function makeDie(pos, opts = {}){
-  const size = 0.5
+  const size = 0.5 * 0.75 // 3/4 of previous size
   const shape = new CANNON.Box(new CANNON.Vec3(size, size, size))
   const body = new CANNON.Body({ mass: 1, shape, material: diceMat, angularDamping: 0.2, linearDamping: 0.05 })
   body.position.set(pos[0], pos[1], pos[2])
@@ -349,7 +389,8 @@ function makeDie(pos, opts = {}){
   if (opts.angularVelocity) {
     const w = opts.angularVelocity; body.angularVelocity.set(w[0], w[1], w[2])
   } else {
-    body.angularVelocity.set(0.5*(Math.random()*2-1), 0.4*(Math.random()*2-1), 0.5*(Math.random()*2-1))
+    // No initial rotating force; start at rest
+    body.angularVelocity.set(0, 0, 0)
   }
   // Improve sleep behavior for stability
   body.allowSleep = true
@@ -419,19 +460,47 @@ setupDeviceOrientation()
 // --- Accelerometer (Creations SDK / emulator shim) ---
 let useAccel = false
 const accelG = new Float32Array([0, -9.8, 0])
+const accelTilt = new Float32Array([0, -1, 0]) // last tilt vector (x,y,z) in [-1,1]
+const lastTilt = new Float32Array([0, -1, 0])
+
+function wakeAllDice() {
+  for (let i = 0; i < diceList.length; i++) {
+    try { diceList[i].body.wakeUp() } catch {}
+  }
+}
+
+function maybeWakeOnTiltChange(tx, ty, tz) {
+  const dx = tx - lastTilt[0]
+  const dy = ty - lastTilt[1]
+  const dz = tz - lastTilt[2]
+  const diff = Math.hypot(dx, dy, dz)
+  const mag = Math.hypot(tx, ty, tz)
+  if (diff > 0.05 || mag > 0.2) {
+    wakeAllDice()
+  }
+  lastTilt[0] = tx; lastTilt[1] = ty; lastTilt[2] = tz
+}
 function startAccelerometer(frequency = 60) {
   try {
     const acc = window?.creationSensors?.accelerometer
     if (acc && typeof acc.start === 'function') {
       acc.start((data) => {
         if (!data) return
-        const tx = (typeof data.tiltX === 'number') ? data.tiltX : (typeof data.x === 'number' ? data.x : 0)
-        const ty = (typeof data.tiltY === 'number') ? data.tiltY : (typeof data.y === 'number' ? data.y : -1)
-        const tz = (typeof data.tiltZ === 'number') ? data.tiltZ : (typeof data.z === 'number' ? data.z : 0)
-        const scale = 9.8 * gravityScale
+        // Use tilt vector in [-1,1] for gravity direction; normalize then scale to 9.8
+        const tx0 = (typeof data.tiltX === 'number') ? data.tiltX : (typeof data.x === 'number' ? data.x : 0)
+        const ty0 = (typeof data.tiltY === 'number') ? data.tiltY : (typeof data.y === 'number' ? data.y : -1)
+        const tz0 = (typeof data.tiltZ === 'number') ? data.tiltZ : (typeof data.z === 'number' ? data.z : 0)
+        // Flip all axes to correct inverted feel (left/right, up/down, in/out)
+        const tx = -tx0, ty = -ty0, tz = -tz0
+        accelTilt[0] = tx
+        accelTilt[1] = ty
+        accelTilt[2] = tz
+        const len = Math.hypot(tx, ty, tz)
+        const scale = (len > 1e-3) ? (9.8 * gravityScale / len) : (9.8 * gravityScale)
         accelG[0] = tx * scale
         accelG[1] = ty * scale
         accelG[2] = tz * scale
+        maybeWakeOnTiltChange(tx, ty, tz)
         useAccel = true
       }, { frequency })
       return true
@@ -482,51 +551,48 @@ function setupTiltOverlay() {
   source.style.opacity = '0.8'
   source.style.marginBottom = '6px'
 
-  const btn = document.createElement('button')
-  btn.id = 'accel-toggle'
-  btn.textContent = 'Start Accelerometer'
-  btn.style.padding = '4px 8px'
-  btn.style.fontSize = '12px'
-  btn.style.cursor = 'pointer'
-  btn.style.background = '#1b6ef3'
-  btn.style.color = '#fff'
-  btn.style.border = 'none'
-  btn.style.borderRadius = '4px'
-
-  btn.addEventListener('click', async () => {
-    if (!useAccel) {
-      // Check availability if present
-      try {
-        const acc = window?.creationSensors?.accelerometer
-        if (!acc) return
-        if (typeof acc.isAvailable === 'function') {
-          const ok = await acc.isAvailable()
-          if (!ok) return
-        }
-      } catch {}
-      const started = startAccelerometer(60)
-      if (started) btn.textContent = 'Stop Accelerometer'
-    } else {
-      const stopped = stopAccelerometer()
-      if (stopped) btn.textContent = 'Start Accelerometer'
-    }
-  })
-
   panel.appendChild(title)
   panel.appendChild(vals)
   panel.appendChild(source)
-  panel.appendChild(btn)
   document.body.appendChild(panel)
 
-  tiltUi = { panel, vals, source, btn, xEl: panel.querySelector('#tilt-x'), yEl: panel.querySelector('#tilt-y'), zEl: panel.querySelector('#tilt-z') }
+  tiltUi = { panel, vals, source, xEl: panel.querySelector('#tilt-x'), yEl: panel.querySelector('#tilt-y'), zEl: panel.querySelector('#tilt-z') }
 }
 setupTiltOverlay()
 
-function computeGravity() {
-  // Prefer accelerometer vector if available
-  if (useAccel) {
-    return accelG
+// Try to auto-start accelerometer when available (works in emulator shim)
+try {
+  const acc = window?.creationSensors?.accelerometer
+  if (acc) {
+    if (typeof acc.isAvailable === 'function') {
+      acc.isAvailable().then((ok) => { if (ok) startAccelerometer(60) }).catch(() => {})
+    } else {
+      startAccelerometer(60)
+    }
   }
+  // Retry for a short window in case emulator shim injects after our script runs
+  let tries = 0
+  const maxTries = 40 // ~12s at 300ms
+  const t = setInterval(() => {
+    if (useAccel) { clearInterval(t); return }
+    try {
+      const acc2 = window?.creationSensors?.accelerometer
+      if (acc2) {
+        if (typeof acc2.isAvailable === 'function') {
+          acc2.isAvailable().then((ok) => { if (ok) startAccelerometer(60) }).catch(() => {})
+        } else {
+          startAccelerometer(60)
+        }
+      }
+    } catch {}
+    tries++
+    if (tries >= maxTries) clearInterval(t)
+  }, 300)
+} catch {}
+
+function computeGravity() {
+  // Prefer accelerometer tilt-derived gravity if available
+  if (useAccel) return accelG
   // Fallback: Base gravity downwards Y, rotate by tilts to align with device
   const gx = Math.sin(tiltY)
   const gz = -Math.sin(tiltX)
@@ -557,51 +623,24 @@ world.defaultContactMaterial.restitution = 0.25
 // Static box walls (AABB of BOX_HALF)
 const groundMat = new CANNON.Material('ground')
 const diceMat = new CANNON.Material('dice')
-world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, { friction: 0.6, restitution: 0.05 }))
+world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, { friction: 0.35, restitution: 0.05 }))
 
-function addWall(normal, center) {
-  const shape = new CANNON.Plane()
+function addThinWall(center, halfExtents) {
+  const shape = new CANNON.Box(new CANNON.Vec3(halfExtents[0], halfExtents[1], halfExtents[2]))
   const body = new CANNON.Body({ mass: 0, material: groundMat })
   body.addShape(shape)
-  // Rotate plane so its normal aligns with provided normal, then offset along normal
-  const n = new CANNON.Vec3(normal[0], normal[1], normal[2])
-  const z = new CANNON.Vec3(0, 0, 1)
-  const q = new CANNON.Quaternion()
-  // Normalize target normal
-  const nLen = n.length()
-  if (nLen > 1e-6) n.scale(1 / nLen, n)
-  const dot = z.dot(n)
-  const EPS = 1e-6
-  if (dot > 1 - EPS) {
-    // Aligned: identity rotation
-    q.set(0, 0, 0, 1)
-  } else if (dot < -1 + EPS) {
-    // Opposite: 180 degrees around any axis orthogonal to z
-    // Choose X axis unless target normal is colinear; fall back to Y
-    const axis = Math.abs(z.x) < 0.9 ? new CANNON.Vec3(1, 0, 0) : new CANNON.Vec3(0, 1, 0)
-    q.setFromAxisAngle(axis, Math.PI)
-  } else {
-    const axis = new CANNON.Vec3()
-    z.cross(n, axis)
-    const axisLen = axis.length()
-    if (axisLen > EPS) axis.scale(1 / axisLen, axis)
-    const angle = Math.acos(Math.max(-1, Math.min(1, dot)))
-    q.setFromAxisAngle(axis, angle)
-  }
-  body.quaternion.copy(q)
-  // Place plane so that "center" is a point on the plane (face center)
   body.position.set(center[0], center[1], center[2])
   world.addBody(body)
 }
 
-// Build 6 walls using current BOX_HALF
-// IMPORTANT: normals must face inward and positions must be at face centers
-addWall([-1, 0, 0],  [ BOX_HALF, 0, 0]) // +X wall, inward -X
-addWall([ 1, 0, 0],  [-BOX_HALF, 0, 0]) // -X wall, inward +X
-addWall([ 0,-1, 0],  [0,  BOX_HALF, 0]) // +Y wall, inward -Y
-addWall([ 0, 1, 0],  [0, -BOX_HALF, 0]) // -Y wall, inward +Y
-addWall([ 0, 0,-1],  [0, 0,  BOX_HALF]) // +Z wall, inward -Z
-addWall([ 0, 0, 1],  [0, 0, -BOX_HALF]) // -Z wall, inward +Z
+// Build 6 thin box walls (thickness 0.02)
+const T = 0.02
+addThinWall([ BOX_HALF, 0, 0], [T, BOX_HALF, BOX_HALF])
+addThinWall([-BOX_HALF, 0, 0], [T, BOX_HALF, BOX_HALF])
+addThinWall([0,  BOX_HALF, 0], [BOX_HALF, T, BOX_HALF])
+addThinWall([0, -BOX_HALF, 0], [BOX_HALF, T, BOX_HALF])
+addThinWall([0, 0,  BOX_HALF], [BOX_HALF, BOX_HALF, T])
+addThinWall([0, 0, -BOX_HALF], [BOX_HALF, BOX_HALF, T])
 
 function stepPhysics(dt) {
   const g = computeGravity()
@@ -609,8 +648,28 @@ function stepPhysics(dt) {
   const gx = Math.max(-30, Math.min(30, g[0]))
   const gy = Math.max(-30, Math.min(30, g[1]))
   const gz = Math.max(-30, Math.min(30, g[2]))
+  // If gravity direction changes abruptly, wake bodies and damp angular spin to avoid gyro-induced torque feel
+  const prevG = world.gravity
+  const prevLen = Math.hypot(prevG.x, prevG.y, prevG.z) || 1
+  const currLen = Math.hypot(gx, gy, gz) || 1
+  const px = prevG.x / prevLen, py = prevG.y / prevLen, pz = prevG.z / prevLen
+  const cx = gx / currLen, cy = gy / currLen, cz = gz / currLen
+  const dot = Math.max(-1, Math.min(1, px * cx + py * cy + pz * cz))
+  const angle = Math.acos(dot)
   world.gravity.set(gx, gy, gz)
-  // Use fixed time step for stability
+  if (angle > 0.2) {
+    for (let i = 0; i < diceList.length; i++) {
+      const b = diceList[i].body
+      try {
+        b.wakeUp()
+        // halve angular velocity to prevent sudden opposite spin sensation
+        b.angularVelocity.set(b.angularVelocity.x * 0.5, b.angularVelocity.y * 0.5, b.angularVelocity.z * 0.5)
+        // clear any accumulated torque
+        b.torque.set(0, 0, 0)
+      } catch {}
+    }
+  }
+  // Use fixed time step for stability; wake bodies if gravity changes significantly
   const fixed = 1 / 60
   world.step(fixed, dt, 3)
 }
@@ -633,10 +692,10 @@ function render(nowMs) {
   // Update tilt UI
   if (tiltUi) {
     if (useAccel) {
-      tiltUi.source.textContent = 'source: accelerometer'
-      tiltUi.xEl.textContent = (accelG[0] / (9.8 * gravityScale)).toFixed(2)
-      tiltUi.yEl.textContent = (accelG[1] / (9.8 * gravityScale)).toFixed(2)
-      tiltUi.zEl.textContent = (accelG[2] / (9.8 * gravityScale)).toFixed(2)
+      tiltUi.source.textContent = 'source: gyro tilt'
+      tiltUi.xEl.textContent = accelTilt[0].toFixed(2)
+      tiltUi.yEl.textContent = accelTilt[1].toFixed(2)
+      tiltUi.zEl.textContent = accelTilt[2].toFixed(2)
     } else {
       tiltUi.source.textContent = 'source: fallback'
       tiltUi.xEl.textContent = Math.sin(tiltY).toFixed(2)
@@ -677,7 +736,7 @@ function render(nowMs) {
     model[13] = b.position.y
     model[14] = b.position.z
     gl.uniformMatrix4fv(u_model, false, model)
-    gl.drawElements(gl.TRIANGLES, cubeIndices.length, gl.UNSIGNED_SHORT, 0)
+    gl.drawElements(gl.TRIANGLES, diceMesh.indices.length, gl.UNSIGNED_INT, 0)
   }
 
   requestAnimationFrame(render)
@@ -692,6 +751,18 @@ deviceControls.on('sideButton', () => {
   } else {
     const d = diceList.pop()
     try { world.removeBody(d.body) } catch {}
+  }
+})
+
+// Hardware scroll wheel: up -> add, down -> remove
+deviceControls.on('scrollWheel', ({ direction }) => {
+  if (direction === 'up') {
+    diceList.push(makeDie([ (Math.random()-0.5)*1.2, 1.2 + Math.random()*0.4, (Math.random()-0.5)*1.2 ]))
+  } else {
+    if (diceList.length > 0) {
+      const d = diceList.pop()
+      try { world.removeBody(d.body) } catch {}
+    }
   }
 })
 

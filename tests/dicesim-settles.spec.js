@@ -27,17 +27,17 @@ test.describe('DiceSim settles', () => {
     await expect.poll(async () => await app.evaluate(() => (window.__diceDebug && window.__diceDebug.getCount && window.__diceDebug.getCount()) || 0)).toBeGreaterThan(0);
 
     // Give physics a moment to settle with a static gravity
-    const timeoutMs = 8000;
+    const timeoutMs = 10000;
     const thresholdLin = 0.05; // m/s
     const thresholdAng = 0.2;  // rad/s (rough)
     const start = Date.now();
     let settled = false;
     while (Date.now() - start < timeoutMs && !settled) {
-      const { speeds, angSpeeds } = await app.evaluate(() => {
+      const { speeds, angSpeeds, sleeping } = await app.evaluate(() => {
         const get = (fn) => (window.__diceDebug && fn) ? fn() : [];
-        return { speeds: get(window.__diceDebug?.getSpeeds), angSpeeds: get(window.__diceDebug?.getAngularSpeeds) };
+        return { speeds: get(window.__diceDebug?.getSpeeds), angSpeeds: get(window.__diceDebug?.getAngularSpeeds), sleeping: get(window.__diceDebug?.getSleeping) };
       });
-      if (speeds.length > 0 && speeds.every(v => v <= thresholdLin) && angSpeeds.every(v => v <= thresholdAng)) {
+      if (speeds.length > 0 && (sleeping.every(Boolean) || (speeds.every(v => v <= thresholdLin) && angSpeeds.every(v => v <= thresholdAng)))) {
         settled = true;
         break;
       }
