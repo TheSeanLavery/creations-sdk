@@ -56,6 +56,45 @@ function mat4FromQuat(q) {
   ])
 }
 
+// Local matrix helpers for shadow mapping
+function ortho(l, r, b, t, n, f) {
+  const out = new Float32Array(16)
+  const lr = 1 / (l - r)
+  const bt = 1 / (b - t)
+  const nf = 1 / (n - f)
+  out[0] = -2 * lr
+  out[5] = -2 * bt
+  out[10] = 2 * nf
+  out[12] = (l + r) * lr
+  out[13] = (t + b) * bt
+  out[14] = (f + n) * nf
+  out[15] = 1
+  return out
+}
+function lookAt(eye, target, up) {
+  const [ex, ey, ez] = eye
+  const [tx, ty, tz] = target
+  const [ux, uy, uz] = up
+  let zx = ex - tx, zy = ey - ty, zz = ez - tz
+  let zl = Math.hypot(zx, zy, zz) || 1; zx /= zl; zy /= zl; zz /= zl
+  let xx = uy * zz - uz * zy
+  let xy = uz * zx - ux * zz
+  let xz = ux * zy - uy * zx
+  let xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl
+  let yx = zy * xz - zz * xy
+  let yy = zz * xx - zx * xz
+  let yz = zx * xy - zy * xx
+  const out = new Float32Array(16)
+  out[0] = xx; out[1] = yx; out[2] = zx; out[3] = 0
+  out[4] = xy; out[5] = yy; out[6] = zy; out[7] = 0
+  out[8] = xz; out[9] = yz; out[10] = zz; out[11] = 0
+  out[12] = -(xx * ex + xy * ey + xz * ez)
+  out[13] = -(yx * ex + yy * ey + yz * ez)
+  out[14] = -(zx * ex + zy * ey + zz * ez)
+  out[15] = 1
+  return out
+}
+
 // --- Resize / viewport ---
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
@@ -242,22 +281,45 @@ layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_normal;
 uniform mat4 u_mvp;
 uniform mat4 u_model;
+uniform mat4 u_lightVP;
 out vec3 v_nrm_world;
+out vec4 v_pos_world;
 void main(){
-  vec3 n = mat3(u_model) * a_normal;
+  mat3 nm = transpose(inverse(mat3(u_model)));
+  vec3 n = nm * a_normal;
   v_nrm_world = normalize(n);
-  gl_Position = u_mvp * u_model * vec4(a_position, 1.0);
+  v_pos_world = u_model * vec4(a_position, 1.0);
+  gl_Position = u_mvp * v_pos_world;
 }`
 
 const diceFS = `#version 300 es
 precision highp float;
+precision highp sampler2DShadow;
 in vec3 v_nrm_world;
+in vec4 v_pos_world;
 out vec4 outColor;
-const vec3 LIGHT_DIR = normalize(vec3(0.6, 0.8, 0.4));
-const vec3 BASE_COLOR = vec3(0.95);
+uniform mat4 u_lightVP;
+uniform highp sampler2DShadow u_shadowMap;
+uniform vec3 u_baseColor;
+uniform vec3 u_lightDir;
+const vec3 LIGHT_COLOR = vec3(1.0);
+const vec3 AMBIENT = vec3(0.18);
 void main(){
-  float ndl = max(0.0, dot(normalize(v_nrm_world), LIGHT_DIR));
-  vec3 color = BASE_COLOR * (0.25 + 0.75 * ndl);
+  vec3 N = normalize(v_nrm_world);
+  vec3 L = normalize(-u_lightDir);
+  float ndl = max(0.0, dot(N, L));
+  // Shadow mapping
+  vec4 posLight = u_lightVP * v_pos_world;
+  vec3 sc = posLight.xyz / max(0.0001, posLight.w);
+  sc = sc * 0.5 + 0.5;
+  float shadow = 1.0;
+  if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z > 0.0 && sc.z < 1.0) {
+    float bias = max(0.0025, 0.006 * (1.0 - ndl));
+    shadow = texture(u_shadowMap, vec3(sc.xy, sc.z - bias));
+  }
+  float shadowTerm = mix(0.6, 1.0, shadow);
+  vec3 diffuse = u_baseColor * LIGHT_COLOR * ndl * shadowTerm;
+  vec3 color = diffuse + AMBIENT * u_baseColor;
   outColor = vec4(color, 1.0);
 }`
 
@@ -318,6 +380,10 @@ gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, diceIdxBuf)
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, diceMesh.indices, gl.STATIC_DRAW)
 const u_mvp = gl.getUniformLocation(diceProg, 'u_mvp')
 const u_model = gl.getUniformLocation(diceProg, 'u_model')
+const u_lightVP = gl.getUniformLocation(diceProg, 'u_lightVP')
+const u_shadowMap = gl.getUniformLocation(diceProg, 'u_shadowMap')
+const u_baseColor = gl.getUniformLocation(diceProg, 'u_baseColor')
+const u_lightDir = gl.getUniformLocation(diceProg, 'u_lightDir')
 
 // --- Wireframe box ---
 const boxProg = createProgram(gl, lineVS, lineFS)
@@ -351,34 +417,90 @@ gl.bufferData(gl.ARRAY_BUFFER, boxLines, gl.STATIC_DRAW)
 gl.enableVertexAttribArray(0)
 gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
 
-// Debug: visualize colliders as short normal arrows from wall centers
-const colliderVAO = gl.createVertexArray()
-gl.bindVertexArray(colliderVAO)
-const colliderBuf = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, colliderBuf)
-const wallCenters = [
-  [ BOX_HALF, 0, 0,  -1, 0, 0], // +X wall, normal -X
-  [-BOX_HALF, 0, 0,   1, 0, 0], // -X wall, normal +X
-  [ 0, BOX_HALF, 0,   0,-1, 0], // +Y wall, normal -Y
-  [ 0,-BOX_HALF, 0,   0, 1, 0], // -Y wall, normal +Y
-  [ 0, 0, BOX_HALF,   0, 0,-1], // +Z wall, normal -Z
-  [ 0, 0,-BOX_HALF,   0, 0, 1], // -Z wall, normal +Z
-]
-const arrowLen = 0.6
-const collPts = []
-for (const [cx, cy, cz, nx, ny, nz] of wallCenters) {
-  collPts.push(cx, cy, cz)
-  collPts.push(cx + nx * arrowLen, cy + ny * arrowLen, cz + nz * arrowLen)
+// (collider debug removed)
+
+// --- Solid wall quads (4 side walls) using same attribute layout as dice ---
+function generateWalls(size) {
+  const s = size
+  const pos = [
+    // +X
+    s, -s, -s,  s,  s, -s,  s,  s,  s,  s, -s,  s,
+    // -X
+    -s, -s,  s, -s,  s,  s, -s,  s, -s, -s, -s, -s,
+    // +Z
+    -s, -s,  s, -s,  s,  s,  s,  s,  s,  s, -s,  s,
+    // -Z
+    s, -s, -s,  s,  s, -s, -s,  s, -s, -s, -s, -s,
+    // -Y (floor)
+    -s, -s, -s,  -s, -s,  s,   s, -s,  s,   s, -s, -s,
+  ]
+  // Inward-facing normals (we are inside the box)
+  const nrm = [
+    -1,0,0, -1,0,0, -1,0,0, -1,0,0, // +X wall inward -X
+     1,0,0,  1,0,0,  1,0,0,  1,0,0, // -X wall inward +X
+     0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, // +Z wall inward -Z
+     0,0, 1, 0,0, 1, 0,0, 1, 0,0, 1, // -Z wall inward +Z
+     0,1,0, 0,1,0, 0,1,0, 0,1,0,     // floor inward +Y
+  ]
+  const idx = [
+    0,1,2, 0,2,3,      // +X
+    4,5,6, 4,6,7,      // -X
+    8,9,10, 8,10,11,   // +Z
+    12,13,14, 12,14,15,// -Z
+    16,17,18, 16,18,19 // floor
+  ]
+  return { positions: new Float32Array(pos), normals: new Float32Array(nrm), indices: new Uint16Array(idx) }
 }
-const colliderLines = new Float32Array(collPts)
-gl.bufferData(gl.ARRAY_BUFFER, colliderLines, gl.STATIC_DRAW)
+const wallsMesh = generateWalls(2.0)
+const wallsVAO = gl.createVertexArray()
+gl.bindVertexArray(wallsVAO)
+const wallsPosBuf = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, wallsPosBuf)
+gl.bufferData(gl.ARRAY_BUFFER, wallsMesh.positions, gl.STATIC_DRAW)
 gl.enableVertexAttribArray(0)
 gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
+const wallsNrmBuf = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, wallsNrmBuf)
+gl.bufferData(gl.ARRAY_BUFFER, wallsMesh.normals, gl.STATIC_DRAW)
+gl.enableVertexAttribArray(1)
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0)
+const wallsIdxBuf = gl.createBuffer()
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wallsIdxBuf)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, wallsMesh.indices, gl.STATIC_DRAW)
+
+// --- Shadow map setup ---
+const SHADOW_SIZE = 1024
+const shadowFbo = gl.createFramebuffer()
+gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo)
+const shadowTex = gl.createTexture()
+gl.bindTexture(gl.TEXTURE_2D, shadowTex)
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+// Enable depth comparison for sampler2DShadow
+try {
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
+} catch {}
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowTex, 0)
+gl.drawBuffers([gl.NONE])
+gl.readBuffer(gl.NONE)
+gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+
+const shadowVS = `#version 300 es\nprecision highp float;\nlayout(location=0) in vec3 a_position;\nuniform mat4 u_lightVP;\nuniform mat4 u_model;\nvoid main(){ gl_Position = u_lightVP * u_model * vec4(a_position,1.0); }`
+const shadowFS = `#version 300 es\nprecision highp float;\nvoid main(){}\n`
+const shadowProg = createProgram(gl, shadowVS, shadowFS)
+const u_sh_model = gl.getUniformLocation(shadowProg, 'u_model')
+const u_sh_lightVP = gl.getUniformLocation(shadowProg, 'u_lightVP')
 
 // --- Physics state ---
+const DIE_HALF_EXTENT = 0.5 * 0.75 // physics collider half-extent
+const DICE_VISUAL_SCALE = 0.9     // render model smaller than collider
 function makeDie(pos, opts = {}){
-  const size = 0.5 * 0.75 // 3/4 of previous size
-  const shape = new CANNON.Box(new CANNON.Vec3(size, size, size))
+  const size = DIE_HALF_EXTENT
+  const shape = new CANNON.Box(new CANNON.Vec3(DIE_HALF_EXTENT, DIE_HALF_EXTENT, DIE_HALF_EXTENT))
   const body = new CANNON.Body({ mass: 1, shape, material: diceMat, angularDamping: 0.2, linearDamping: 0.05 })
   body.position.set(pos[0], pos[1], pos[2])
   if (opts.initialVelocity) {
@@ -417,6 +539,22 @@ function obbRadiusAlongAxis(halfSize, rotMat, axisIndex) {
 
 // --- Camera ---
 let cameraDistance = 5.0
+let lightAzimuth = 1.71 // default
+let lightElevation = 2.91 // default (0=horizontal, pi=from below). We show -dir in HUD
+let draggingLight = false
+let dragPX = 0, dragPY = 0
+window.addEventListener('mousedown', (e) => { if (e.shiftKey) { draggingLight = true; dragPX = e.clientX; dragPY = e.clientY } })
+window.addEventListener('mousemove', (e) => {
+  if (!draggingLight) return
+  const dx = (e.clientX - dragPX) / window.innerWidth
+  const dy = (e.clientY - dragPY) / window.innerHeight
+  dragPX = e.clientX; dragPY = e.clientY
+  lightAzimuth += dx * Math.PI * 2.0
+  lightElevation += -dy * Math.PI
+  const eps = 0.05
+  lightElevation = Math.max(eps, Math.min(Math.PI - eps, lightElevation))
+})
+window.addEventListener('mouseup', () => { draggingLight = false })
 
 // --- Controls: device orientation (gyro) and desktop fallback ---
 let tiltX = 0, tiltY = 0 // radians, desktop fallback
@@ -520,45 +658,7 @@ function stopAccelerometer() {
   return false
 }
 
-// --- Minimal overlay UI to enable accel and show tilt ---
-let tiltUi = null
-function setupTiltOverlay() {
-  const panel = document.createElement('div')
-  panel.style.position = 'fixed'
-  panel.style.right = '8px'
-  panel.style.top = '8px'
-  panel.style.padding = '8px 10px'
-  panel.style.background = 'rgba(0,0,0,0.5)'
-  panel.style.border = '1px solid rgba(255,255,255,0.2)'
-  panel.style.borderRadius = '6px'
-  panel.style.color = '#fff'
-  panel.style.fontFamily = 'system-ui, -apple-system, Roboto, sans-serif'
-  panel.style.fontSize = '12px'
-  panel.style.zIndex = '1001'
-
-  const title = document.createElement('div')
-  title.textContent = 'Tilt'
-  title.style.fontWeight = '600'
-  title.style.marginBottom = '6px'
-
-  const vals = document.createElement('div')
-  vals.innerHTML = 'x <span id="tilt-x">0.00</span> | y <span id="tilt-y">0.00</span> | z <span id="tilt-z">1.00</span>'
-  vals.style.marginBottom = '6px'
-
-  const source = document.createElement('div')
-  source.id = 'tilt-source'
-  source.textContent = 'source: fallback'
-  source.style.opacity = '0.8'
-  source.style.marginBottom = '6px'
-
-  panel.appendChild(title)
-  panel.appendChild(vals)
-  panel.appendChild(source)
-  document.body.appendChild(panel)
-
-  tiltUi = { panel, vals, source, xEl: panel.querySelector('#tilt-x'), yEl: panel.querySelector('#tilt-y'), zEl: panel.querySelector('#tilt-z') }
-}
-setupTiltOverlay()
+// (Removed overlay UI)
 
 // Try to auto-start accelerometer when available (works in emulator shim)
 try {
@@ -609,6 +709,7 @@ gl.enable(gl.DEPTH_TEST)
 gl.clearColor(0.02, 0.02, 0.035, 1.0)
 gl.enable(gl.BLEND)
 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+try { gl.enable(gl.CULL_FACE) } catch {}
 
 let prevMs = performance.now()
 
@@ -623,7 +724,8 @@ world.defaultContactMaterial.restitution = 0.25
 // Static box walls (AABB of BOX_HALF)
 const groundMat = new CANNON.Material('ground')
 const diceMat = new CANNON.Material('dice')
-world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, { friction: 0.35, restitution: 0.05 }))
+world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, { friction: 0.45, restitution: 0.05 }))
+world.addContactMaterial(new CANNON.ContactMaterial(diceMat, diceMat, { friction: 0.45, restitution: 0.05 }))
 
 function addThinWall(center, halfExtents) {
   const shape = new CANNON.Box(new CANNON.Vec3(halfExtents[0], halfExtents[1], halfExtents[2]))
@@ -689,38 +791,59 @@ function render(nowMs) {
   view = translate(view, [0, 0, -cameraDistance])
   const vp = multiply(proj, view)
 
-  // Update tilt UI
-  if (tiltUi) {
-    if (useAccel) {
-      tiltUi.source.textContent = 'source: gyro tilt'
-      tiltUi.xEl.textContent = accelTilt[0].toFixed(2)
-      tiltUi.yEl.textContent = accelTilt[1].toFixed(2)
-      tiltUi.zEl.textContent = accelTilt[2].toFixed(2)
-    } else {
-      tiltUi.source.textContent = 'source: fallback'
-      tiltUi.xEl.textContent = Math.sin(tiltY).toFixed(2)
-      tiltUi.yEl.textContent = (-Math.cos(tiltX) * Math.cos(tiltY)).toFixed(2)
-      tiltUi.zEl.textContent = (-Math.sin(tiltX)).toFixed(2)
-    }
+  // (overlay removed)
+
+  // Compute light view-projection (directional light)
+  const lightDir = [Math.cos(lightElevation) * Math.cos(lightAzimuth), Math.sin(lightElevation), Math.cos(lightElevation) * Math.sin(lightAzimuth)]
+  // overlay removed
+  const lightDist = 8.0
+  const eye = [-lightDir[0]*lightDist, -lightDir[1]*lightDist, -lightDir[2]*lightDist]
+  const target = [0, 0, 0]
+  const up = [0, 1, 0]
+  const lightView = lookAt(eye, target, up)
+  const lightProj = ortho(-3, 3, -3, 3, 0.5, 15.0)
+  const lightVP = multiply(lightProj, lightView)
+
+  // Shadow pass
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo)
+  gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE)
+  gl.clear(gl.DEPTH_BUFFER_BIT)
+  gl.useProgram(shadowProg)
+  gl.uniformMatrix4fv(u_sh_lightVP, false, lightVP)
+// Walls (render 4 sides + floor; skip ceiling)
+  gl.bindVertexArray(wallsVAO)
+  let modelI = identity()
+  gl.uniformMatrix4fv(u_sh_model, false, modelI)
+// 4 sides = 24 indices, floor adds +6 = 30
+gl.drawElements(gl.TRIANGLES, 30, gl.UNSIGNED_SHORT, 0)
+  // Dice
+  gl.bindVertexArray(diceVAO)
+  for (let i = 0; i < diceList.length; i++) {
+    const b = diceList[i].body
+    const q = new Float32Array([b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w])
+    const Rm = mat4FromQuat(q)
+    const model = Rm.slice(0)
+    const S = diceList[i].size * DICE_VISUAL_SCALE
+    model[0] *= S; model[1] *= S; model[2] *= S
+    model[4] *= S; model[5] *= S; model[6] *= S
+    model[8] *= S; model[9] *= S; model[10]*= S
+    model[12] = b.position.x
+    model[13] = b.position.y
+    model[14] = b.position.z
+    gl.uniformMatrix4fv(u_sh_model, false, model)
+    gl.drawElements(gl.TRIANGLES, diceMesh.indices.length, gl.UNSIGNED_INT, 0)
   }
-
-  // Draw box (wireframe)
-  gl.useProgram(boxProg)
-  gl.uniformMatrix4fv(u_vp, false, vp)
-  gl.uniform4f(u_color, 1, 1, 1, 0.2)
-  gl.bindVertexArray(boxVAO)
-  gl.drawArrays(gl.LINES, 0, boxLines.length / 3)
-
-  // Draw collider normals (yellow)
-  gl.useProgram(boxProg)
-  gl.uniformMatrix4fv(u_vp, false, vp)
-  gl.uniform4f(u_color, 1, 1, 0, 0.7)
-  gl.bindVertexArray(colliderVAO)
-  gl.drawArrays(gl.LINES, 0, colliderLines.length / 3)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  gl.viewport(0, 0, canvas.width, canvas.height)
 
   // Draw dice
   gl.useProgram(diceProg)
   gl.uniformMatrix4fv(u_mvp, false, vp)
+  gl.uniformMatrix4fv(u_lightVP, false, lightVP)
+  gl.uniform3f(u_lightDir, lightDir[0], lightDir[1], lightDir[2])
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, shadowTex)
+  gl.uniform1i(u_shadowMap, 0)
   gl.bindVertexArray(diceVAO)
   for (let i = 0; i < diceList.length; i++) {
     const dice = diceList[i]
@@ -728,16 +851,26 @@ function render(nowMs) {
     const q = new Float32Array([b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w])
     const Rm = mat4FromQuat(q)
     const model = Rm.slice(0)
-    const Sx = dice.size, Sy = dice.size, Sz = dice.size
+    const Sx = DIE_HALF_EXTENT * DICE_VISUAL_SCALE
+    const Sy = DIE_HALF_EXTENT * DICE_VISUAL_SCALE
+    const Sz = DIE_HALF_EXTENT * DICE_VISUAL_SCALE
     model[0] *= Sx; model[1] *= Sx; model[2] *= Sx
     model[4] *= Sy; model[5] *= Sy; model[6] *= Sy
     model[8] *= Sz; model[9] *= Sz; model[10]*= Sz
     model[12] = b.position.x
     model[13] = b.position.y
     model[14] = b.position.z
+    gl.uniform3f(u_baseColor, 0.92, 0.92, 0.92)
     gl.uniformMatrix4fv(u_model, false, model)
     gl.drawElements(gl.TRIANGLES, diceMesh.indices.length, gl.UNSIGNED_INT, 0)
   }
+
+// Draw solid side walls plus floor (skip ceiling)
+  gl.bindVertexArray(wallsVAO)
+  let modelW = identity()
+  gl.uniformMatrix4fv(u_model, false, modelW)
+  gl.uniform3f(u_baseColor, 0.15, 0.15, 0.15)
+gl.drawElements(gl.TRIANGLES, 30, gl.UNSIGNED_SHORT, 0)
 
   requestAnimationFrame(render)
 }
