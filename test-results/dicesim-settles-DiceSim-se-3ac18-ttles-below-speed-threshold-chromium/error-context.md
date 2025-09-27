@@ -1,0 +1,125 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - strong [ref=e4]: Host
+      - generic [ref=e5]: /creations/DiceSim/index.html
+      - generic [ref=e6]: "Open creation:"
+      - combobox "Open creation:" [ref=e7]:
+        - option "Select a creation…"
+        - option "aiCAD"
+        - option "AIDemo"
+        - option "bitBreaker"
+        - option "bouncing_ball_game"
+        - option "bullet-hell"
+        - option "DiceSim" [selected]
+        - option "DrawingApp"
+        - option "hangman"
+        - option "plugin-demo"
+        - option "r1-tv"
+        - option "ShaderTest"
+        - option "StackerGame"
+        - option "template"
+        - option "webglDemo"
+        - option "webglMulticore"
+      - generic [ref=e8]:
+        - checkbox "Dev Tools" [ref=e9]
+        - generic [ref=e10]: Dev Tools
+      - generic [ref=e11]:
+        - checkbox "Fullscreen" [ref=e12]
+        - generic [ref=e13]: Fullscreen
+  - main [ref=e14]:
+    - generic [ref=e16]:
+      - strong [ref=e17]: Emulator Controls
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: Scroll Ticks per Event (1–200)
+          - generic [ref=e21]:
+            - slider [ref=e22]: "8"
+            - spinbutton [ref=e23]: "8"
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: Tilt X (-1..1)
+            - generic [ref=e27]:
+              - slider [ref=e28]: "0"
+              - spinbutton [ref=e29]: "0"
+          - generic [ref=e30]:
+            - generic [ref=e31]: Tilt Y (-1..1)
+            - generic [ref=e32]:
+              - slider [ref=e33]: "0"
+              - spinbutton [ref=e34]: "0"
+        - generic [ref=e35]:
+          - generic [ref=e36]: Tilt Z (-1..1)
+          - generic [ref=e37]:
+            - slider [ref=e38]: "1"
+            - spinbutton [ref=e39]: "1"
+        - generic [ref=e40]:
+          - button "Reset Tilt (R)" [ref=e41] [cursor=pointer]
+          - generic [ref=e42]: Freq
+          - spinbutton [ref=e43]: "60"
+        - generic [ref=e44]:
+          - button "Side Click (Space)" [ref=e45] [cursor=pointer]
+          - button "Long Press (hold Space)" [ref=e46] [cursor=pointer]
+        - generic [ref=e47]:
+          - button "Scroll Up (↑)" [ref=e48] [cursor=pointer]
+          - button "Scroll Down (↓)" [ref=e49] [cursor=pointer]
+        - generic [ref=e50]:
+          - generic [ref=e51]: Enable Emulator
+          - checkbox [checked] [ref=e52]
+          - generic [ref=e53]: Active
+    - generic [ref=e54]:
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - generic [ref=e58]: ←
+            - generic [ref=e59]: Back
+          - generic [ref=e60]: 00:21
+          - generic [ref=e61]: Batt 89%
+        - iframe [ref=e62]:
+          - generic [ref=f1e3]:
+            - generic [ref=f1e4]: Tilt
+            - generic [ref=f1e5]:
+              - text: x
+              - generic [ref=f1e6]: "0.00"
+              - text: "| y"
+              - generic [ref=f1e7]: "-1.00"
+              - text: "| z"
+              - generic [ref=f1e8]: "0.00"
+            - generic [ref=f1e9]: "source: fallback"
+            - button "Start Accelerometer" [ref=f1e10] [cursor=pointer]
+      - img "Overlay"
+      - generic: r1-tv
+      - img "Big QR" [ref=e65]
+    - complementary [ref=e66]:
+      - generic [ref=e67]:
+        - strong [ref=e68]: Generated QR
+        - img "JSON QR" [ref=e70]
+        - generic [ref=e71]: Share URL
+        - generic [ref=e72]:
+          - textbox "Share URL will appear here" [ref=e73]: http://localhost:3012/creations/DiceSim/index.html
+          - button "Copy" [ref=e74] [cursor=pointer]
+          - button "Download PNG" [ref=e75] [cursor=pointer]
+      - generic [ref=e76]:
+        - strong [ref=e77]: JSON QR (auto-filled)
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - generic [ref=e81]: Title
+              - textbox "Enter title" [ref=e82]: WebGL Multicore
+            - generic [ref=e83]:
+              - generic [ref=e84]: URL
+              - textbox "https://example.com" [ref=e85]: http://localhost:3012/creations/DiceSim/index.html
+          - generic [ref=e86]:
+            - generic [ref=e87]: Description
+            - textbox "Enter description" [ref=e88]: WebGL demo using workers for multicore rendering.
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - generic [ref=e91]: Icon URL
+              - textbox "https://.../icon.png" [ref=e92]: /icon.jpg
+            - generic [ref=e93]:
+              - generic [ref=e94]: Theme Color
+              - textbox "#FE5000" [ref=e95]
+          - button "Generate" [ref=e97] [cursor=pointer]
+```

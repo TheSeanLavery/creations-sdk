@@ -5,6 +5,10 @@
       "url": "/creations/aiCAD/index.html"
     },
     {
+      "label": "AIDemo",
+      "url": "/creations/AIDemo/index.html"
+    },
+    {
       "label": "bitBreaker",
       "url": "/creations/bitBreaker/index.html"
     },
@@ -15,6 +19,10 @@
     {
       "label": "bullet-hell",
       "url": "/creations/bullet-hell/index.html"
+    },
+    {
+      "label": "DiceSim",
+      "url": "/creations/DiceSim/index.html"
     },
     {
       "label": "DrawingApp",

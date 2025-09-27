@@ -1,0 +1,101 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 4vw;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#app {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+h1 {
+    font-size: 6vw;
+    color: #FE5F00;
+    margin-bottom: 3vw;
+    text-align: center;
+}
+
+p {
+    font-size: 4vw;
+    text-align: center;
+    line-height: 1.5;
+}
+
+button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 3vw 5vw;
+    font-size: 4vw;
+    background-color: #FE5F00;
+    color: #000;
+    border: none;
+    border-radius: 2vw;
+    cursor: pointer;
+}
+
+.demo-box {
+    background-color: #222;
+    border: 1px solid #FE5F00;
+    border-radius: 2vw;
+    padding: 4vw;
+    margin-top: 4vw;
+}
+
+#aidemo {
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 2vw;
+    align-items: start;
+    justify-items: center;
+    padding: 2vw;
+}
+
+#aidemo h1 { margin: 0; }
+
+#aidemo .controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 90vw;
+    gap: 2vw;
+}
+
+#aidemo input[type="email"] {
+    width: 100%;
+    padding: 2vw 3vw;
+    border-radius: 2vw;
+    border: 1px solid #333;
+    font-size: 4vw;
+}
+
+#aidemo button#go {
+    width: 100%;
+    padding: 3vw 5vw;
+    font-size: 4vw;
+    background-color: #FE5F00;
+    color: #000;
+    border: none;
+    border-radius: 2vw;
+    cursor: pointer;
+}
+
+#aidemo canvas#art {
+    border: 1px solid #333;
+    border-radius: 2vw;
+}
+
