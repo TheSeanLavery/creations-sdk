@@ -17,6 +17,10 @@
       "url": "/creations/bouncing_ball_game/index.html"
     },
     {
+      "label": "BubblePop",
+      "url": "/creations/BubblePop/index.html"
+    },
+    {
       "label": "bullet-hell",
       "url": "/creations/bullet-hell/index.html"
     },
@@ -27,6 +31,10 @@
     {
       "label": "DrawingApp",
       "url": "/creations/DrawingApp/index.html"
+    },
+    {
+      "label": "emoji-merge-game",
+      "url": "/creations/emoji-merge-game/index.html"
     },
     {
       "label": "hangman",

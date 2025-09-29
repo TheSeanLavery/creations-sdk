@@ -1,11 +1,11 @@
 # Page snapshot
 
 ```yaml
-- generic [active] [ref=e1]:
+- generic [ref=e1]:
   - banner [ref=e2]:
     - generic [ref=e3]:
       - strong [ref=e4]: Host
-      - generic [ref=e5]: /creations/DiceSim/index.html
+      - generic [ref=e5]: /creations/emoji-merge-game/index.html
       - generic [ref=e6]: "Open creation:"
       - combobox "Open creation:" [ref=e7]:
         - option "Select a creation…"
@@ -13,9 +13,11 @@
         - option "AIDemo"
         - option "bitBreaker"
         - option "bouncing_ball_game"
+        - option "BubblePop"
         - option "bullet-hell"
-        - option "DiceSim" [selected]
+        - option "DiceSim"
         - option "DrawingApp"
+        - option "emoji-merge-game" [selected]
         - option "hangman"
         - option "plugin-demo"
         - option "r1-tv"
@@ -43,18 +45,18 @@
           - generic [ref=e25]:
             - generic [ref=e26]: Tilt X (-1..1)
             - generic [ref=e27]:
-              - slider [ref=e28]: "0"
-              - spinbutton [ref=e29]: "0"
+              - slider [ref=e28]: "0.4"
+              - spinbutton [ref=e29]: "0.4"
           - generic [ref=e30]:
             - generic [ref=e31]: Tilt Y (-1..1)
             - generic [ref=e32]:
-              - slider [ref=e33]: "0"
-              - spinbutton [ref=e34]: "0"
+              - slider [ref=e33]: "-0.2"
+              - spinbutton [ref=e34]: "-0.2"
         - generic [ref=e35]:
           - generic [ref=e36]: Tilt Z (-1..1)
           - generic [ref=e37]:
-            - slider [ref=e38]: "1"
-            - spinbutton [ref=e39]: "1"
+            - slider [ref=e38]: "0.7"
+            - spinbutton [active] [ref=e39]: "0.7"
         - generic [ref=e40]:
           - button "Reset Tilt (R)" [ref=e41] [cursor=pointer]
           - generic [ref=e42]: Freq
@@ -75,10 +77,13 @@
           - generic [ref=e57]:
             - generic [ref=e58]: ←
             - generic [ref=e59]: Back
-          - generic [ref=e60]: 01:58
-          - generic [ref=e61]: Batt 57%
+          - generic [ref=e60]: 15:47
+          - generic [ref=e61]: Batt 51%
         - iframe [ref=e62]:
-          
+          - generic [ref=f1e2]:
+            - generic:
+              - generic: "Max: 1"
+              - generic: "x: 0.00 y: 0.00 z: 0.00"
       - img "Overlay"
       - generic: r1-tv
       - img "Big QR" [ref=e65]
@@ -88,7 +93,7 @@
         - img "JSON QR" [ref=e70]
         - generic [ref=e71]: Share URL
         - generic [ref=e72]:
-          - textbox "Share URL will appear here" [ref=e73]: http://localhost:3012/creations/DiceSim/index.html
+          - textbox "Share URL will appear here" [ref=e73]: http://localhost:3012/creations/emoji-merge-game/index.html
           - button "Copy" [ref=e74] [cursor=pointer]
           - button "Download PNG" [ref=e75] [cursor=pointer]
       - generic [ref=e76]:
@@ -97,17 +102,17 @@
           - generic [ref=e79]:
             - generic [ref=e80]:
               - generic [ref=e81]: Title
-              - textbox "Enter title" [ref=e82]: WebGL Multicore
+              - textbox "Enter title" [ref=e82]: emoji-merge-game
             - generic [ref=e83]:
               - generic [ref=e84]: URL
-              - textbox "https://example.com" [ref=e85]: http://localhost:3012/creations/DiceSim/index.html
+              - textbox "https://example.com" [ref=e85]: http://localhost:3012/creations/emoji-merge-game/index.html
           - generic [ref=e86]:
             - generic [ref=e87]: Description
-            - textbox "Enter description" [ref=e88]: WebGL demo using workers for multicore rendering.
+            - textbox "Enter description" [ref=e88]
           - generic [ref=e89]:
             - generic [ref=e90]:
               - generic [ref=e91]: Icon URL
-              - textbox "https://.../icon.png" [ref=e92]: /icon.jpg
+              - textbox "https://.../icon.png" [ref=e92]
             - generic [ref=e93]:
               - generic [ref=e94]: Theme Color
               - textbox "#FE5000" [ref=e95]
